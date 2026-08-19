@@ -588,7 +588,7 @@
     const p = parseFloat(itemPriceInput.value);
     if(g > 0 && p >= 0 && !isNaN(g) && !isNaN(p)){
       const cp = p / g;
-      calcStamp.innerHTML = cp.toFixed(2) + "<small>$ / g</small>";
+      calcStamp.innerHTML = cp.toFixed(3) + "<small>$ / g</small>";
       calcStamp.style.color = "var(--ink)";
       calcStamp.style.borderColor = "var(--ink)";
     } else {
@@ -969,7 +969,7 @@
           <div class="num">${formatNum(item.grams)}g</div>
           <div class="cp-cell">
             <span class="dot ${tier}"></span>
-            <span class="cp-val mono">${item.cp.toFixed(2)}</span>
+            <span class="cp-val mono">${item.cp.toFixed(3)}</span>
           </div>
           ${actions}
         </div>
