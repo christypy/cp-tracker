@@ -410,45 +410,33 @@
 
 <main>
 
-  <!-- 快速計算機 -->
-  <section class="tag-card">
-    <p class="card-title">快速試算</p>
-    <div class="calc-grid">
-      <div class="field">
-        <label for="calcGrams">克數 (g)</label>
-        <input type="number" id="calcGrams" inputmode="decimal" placeholder="例如 50">
-      </div>
-      <div class="field">
-        <label for="calcPrice">價格 ($)</label>
-        <input type="number" id="calcPrice" inputmode="decimal" placeholder="例如 380">
-      </div>
-      <div class="calc-result">
-        <div class="stamp mono" id="calcStamp">--<small>$ / g</small></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 新增品項 -->
+  <!-- 新增品項（先算再填資料） -->
   <section class="tag-card">
     <p class="card-title">新增品項</p>
     <form id="addForm">
+      <div class="field">
+        <label for="itemGrams">克數 (g)</label>
+        <input type="number" id="itemGrams" inputmode="decimal" placeholder="例如 50" required>
+      </div>
+      <div class="field">
+        <label for="itemPrice">價格 ($)</label>
+        <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
+      </div>
+
+      <div class="calc-result">
+        <div class="stamp mono" id="calcStamp">--<small>$ / g</small></div>
+      </div>
+
       <div class="field full">
         <label for="itemName">品項名稱</label>
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
       </div>
-      <div class="field">
+      <div class="field full">
         <label for="itemCategory">類別</label>
         <input type="text" id="itemCategory" list="categoryList" placeholder="例如 防曬" required>
         <datalist id="categoryList"></datalist>
       </div>
-      <div class="field">
-        <label for="itemGrams">克數 (g)</label>
-        <input type="number" id="itemGrams" inputmode="decimal" required>
-      </div>
-      <div class="field full">
-        <label for="itemPrice">價格 ($)</label>
-        <input type="number" id="itemPrice" inputmode="decimal" required>
-      </div>
+
       <button type="submit" id="addBtn">加入紀錄</button>
       <div id="formMsg"></div>
     </form>
@@ -521,14 +509,14 @@
 
   scriptUrlInput.value = scriptUrl;
 
-  // ---------- 快速計算機 ----------
-  const calcGrams = $("calcGrams");
-  const calcPrice = $("calcPrice");
+  // ---------- 新增表單內的即時試算 ----------
+  const itemGramsInput = $("itemGrams");
+  const itemPriceInput = $("itemPrice");
   const calcStamp = $("calcStamp");
 
   function updateCalc(){
-    const g = parseFloat(calcGrams.value);
-    const p = parseFloat(calcPrice.value);
+    const g = parseFloat(itemGramsInput.value);
+    const p = parseFloat(itemPriceInput.value);
     if(g > 0 && p >= 0 && !isNaN(g) && !isNaN(p)){
       const cp = p / g;
       calcStamp.innerHTML = cp.toFixed(2) + "<small>$ / g</small>";
@@ -540,8 +528,8 @@
       calcStamp.style.borderColor = "var(--ink-soft)";
     }
   }
-  calcGrams.addEventListener("input", updateCalc);
-  calcPrice.addEventListener("input", updateCalc);
+  itemGramsInput.addEventListener("input", updateCalc);
+  itemPriceInput.addEventListener("input", updateCalc);
 
   // ---------- 設定 ----------
   $("saveUrlBtn").addEventListener("click", () => {
