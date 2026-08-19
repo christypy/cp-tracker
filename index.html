@@ -292,6 +292,20 @@
     color:var(--ink-soft);
     width:fit-content;
   }
+  .receipt-row .name .date-badge{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    width:fit-content;
+  }
+  .receipt-row.pending{
+    opacity:.55;
+  }
+  .receipt-row .pending-label{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    color:var(--gold);
+  }
   .receipt-row .num{
     font-family:'Space Mono', monospace;
     text-align:right;
@@ -436,6 +450,10 @@
         <input type="text" id="itemCategory" list="categoryList" placeholder="例如 防曬" required>
         <datalist id="categoryList"></datalist>
       </div>
+      <div class="field full">
+        <label for="itemDate">日期</label>
+        <input type="date" id="itemDate">
+      </div>
 
       <button type="submit" id="addBtn">加入紀錄</button>
       <div id="formMsg"></div>
@@ -447,7 +465,10 @@
     <div class="chips" id="categoryChips">
       <button class="chip active" data-cat="__all__">全部</button>
     </div>
-    <input type="text" id="searchInput" placeholder="搜尋品項…">
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
+      <input type="text" id="searchInput" placeholder="搜尋品項…">
+    </div>
   </section>
 
   <div id="syncStatus">
@@ -497,6 +518,7 @@
   let items = [];
   let activeCategory = "__all__";
   let searchTerm = "";
+  let sortAsc = true;
 
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
@@ -553,8 +575,11 @@
       const res = await fetch(scriptUrl + "?t=" + Date.now());
       const data = await res.json();
       if(data.status !== "ok") throw new Error(data.message || "讀取失敗");
-      items = (data.items || []).map(normalizeItem);
-      localStorage.setItem(LS_CACHE_KEY, JSON.stringify(items));
+      const serverItems = (data.items || []).map(normalizeItem);
+      // 保留還在背景佇列裡、尚未寫進試算表的暫存項目，避免刷新時消失
+      const stillPending = items.filter(i => i.pending && uploadQueue.some(j => j.tempId === i.tempId));
+      items = [...stillPending, ...serverItems];
+      localStorage.setItem(LS_CACHE_KEY, JSON.stringify(serverItems));
       syncText.textContent = "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"});
       renderCategoryChips();
       renderTable();
@@ -580,12 +605,64 @@
       category: raw["類別"] || "未分類",
       grams: grams,
       price: price,
-      cp: cp
+      cp: cp,
+      date: raw["日期"] || "",
+      pending: false
     };
   }
 
-  // ---------- 新增品項 ----------
-  $("addForm").addEventListener("submit", async (e) => {
+  // ---------- 新增品項（背景佇列上傳，不擋輸入） ----------
+  const itemDateInput = $("itemDate");
+  // 預設帶入今天日期
+  itemDateInput.value = new Date().toISOString().slice(0, 10);
+
+  const uploadQueue = [];
+  let isProcessingQueue = false;
+  let tempIdCounter = 0;
+
+  function updateQueueStatus(){
+    const n = uploadQueue.length + (isProcessingQueue ? 1 : 0);
+    if(n > 0){
+      syncText.textContent = "背景上傳中…（剩餘 " + n + " 筆）";
+    }
+  }
+
+  async function processQueue(){
+    if(isProcessingQueue) return;
+    isProcessingQueue = true;
+    while(uploadQueue.length > 0){
+      const job = uploadQueue[0];
+      updateQueueStatus();
+      try{
+        await fetch(scriptUrl, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},
+          body: JSON.stringify({
+            action: "add",
+            name: job.name,
+            category: job.category,
+            grams: job.grams,
+            price: job.price,
+            date: job.date
+          })
+        });
+        job.failed = false;
+      }catch(err){
+        job.failed = true;
+        const stillPending = items.find(i => i.tempId === job.tempId);
+        if(stillPending){
+          stillPending.uploadError = true;
+        }
+        renderTable();
+      }
+      uploadQueue.shift();
+    }
+    isProcessingQueue = false;
+    // 佇列全部跑完後，重新整批同步一次，把試算表實際列號補回來
+    await loadItems();
+  }
+
+  $("addForm").addEventListener("submit", (e) => {
     e.preventDefault();
     if(!scriptUrl){
       formMsg.textContent = "請先設定同步網址";
@@ -595,32 +672,46 @@
     const category = $("itemCategory").value.trim();
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
+    const date = itemDateInput.value || "";
     if(!name || !category || !(grams > 0) || isNaN(price) || price < 0){
       formMsg.textContent = "請確認欄位都已正確填寫";
       return;
     }
-    addBtn.disabled = true;
-    formMsg.textContent = "新增中…";
-    try{
-      // 用 text/plain 避免瀏覽器送出 CORS 預檢請求
-      await fetch(scriptUrl, {
-        method: "POST",
-        headers: {"Content-Type": "text/plain;charset=utf-8"},
-        body: JSON.stringify({ action: "add", name, category, grams, price })
-      });
-      $("addForm").reset();
-      formMsg.textContent = "已加入！正在同步…";
-      await loadItems();
-      formMsg.textContent = "";
-    }catch(err){
-      formMsg.textContent = "新增失敗：" + err.message;
-    }finally{
-      addBtn.disabled = false;
-    }
+
+    tempIdCounter += 1;
+    const tempId = "pending-" + tempIdCounter;
+    const cp = price / grams;
+
+    // 先樂觀地把這筆加進畫面上的列表，馬上就看得到，不用等網路
+    items.unshift({
+      row: tempId,
+      tempId: tempId,
+      name, category, grams, price, cp, date,
+      pending: true,
+      uploadError: false
+    });
+    renderCategoryChips();
+    renderTable();
+
+    // 表單立刻清空、聚焦回克數欄位，讓使用者可以馬上輸入下一筆
+    $("addForm").reset();
+    itemDateInput.value = date || new Date().toISOString().slice(0, 10);
+    formMsg.textContent = "";
+    $("itemGrams").focus();
+
+    // 真正的上傳丟進背景佇列處理，不 await，不擋住上面的畫面更新
+    uploadQueue.push({ tempId, name, category, grams, price, date });
+    processQueue();
   });
 
   // ---------- 刪除品項 ----------
   async function deleteItem(row){
+    if(String(row).startsWith("pending-")){
+      // 這筆還在背景上傳中或上傳失敗，還沒真正寫進試算表，直接從畫面上移除即可
+      items = items.filter(i => i.row !== row);
+      renderTable();
+      return;
+    }
     if(!scriptUrl) return;
     if(!confirm("確定要刪除這筆紀錄嗎？")) return;
     try{
@@ -661,6 +752,13 @@
     renderTable();
   });
 
+  const sortToggleBtn = $("sortToggleBtn");
+  sortToggleBtn.addEventListener("click", () => {
+    sortAsc = !sortAsc;
+    sortToggleBtn.textContent = sortAsc ? "CP值 低→高 ↑" : "CP值 高→低 ↓";
+    renderTable();
+  });
+
   // ---------- 表格渲染 ----------
   function tierFor(item, sameCategory){
     // 同類別中依 CP 值三分位決定顏色（划算 / 普通 / 偏貴）
@@ -679,7 +777,7 @@
       const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
       return matchCat && matchSearch;
     });
-    list = list.slice().sort((a,b) => a.cp - b.cp);
+    list = list.slice().sort((a,b) => sortAsc ? a.cp - b.cp : b.cp - a.cp);
 
     if(list.length === 0){
       tableBody.innerHTML = '<div class="empty-state">還沒有符合條件的紀錄</div>';
@@ -687,13 +785,21 @@
     }
 
     tableBody.innerHTML = list.map(item => {
-      const sameCategory = items.filter(i => i.category === item.category);
-      const tier = tierFor(item, sameCategory);
+      const sameCategory = items.filter(i => i.category === item.category && !i.pending);
+      const tier = item.pending ? "gray" : tierFor(item, sameCategory);
+      const rowClass = "receipt-row" + (item.pending ? " pending" : "");
+      const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
+      const delOrStatus = item.pending
+        ? (item.uploadError
+            ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
+            : `<span class="pending-label" title="背景上傳中">⏳</span>`)
+        : `<button class="del" data-row="${item.row}" title="刪除">✕</button>`;
       return `
-        <div class="receipt-row">
+        <div class="${rowClass}">
           <div class="name">
             ${escapeHtml(item.name)}
             <span class="cat-badge">${escapeHtml(item.category)}</span>
+            ${dateBadge}
           </div>
           <div class="num price-col">$${formatNum(item.price)}</div>
           <div class="num">${formatNum(item.grams)}g</div>
@@ -701,7 +807,7 @@
             <span class="dot ${tier}"></span>
             <span class="cp-val mono">${item.cp.toFixed(2)}</span>
           </div>
-          <button class="del" data-row="${item.row}" title="刪除">✕</button>
+          ${delOrStatus}
         </div>
       `;
     }).join("");

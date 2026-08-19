@@ -15,7 +15,9 @@
  *    把這組網址貼到網站的「設定同步網址」欄位
  *
  * 試算表第一列（標題列）請依序填入：
- * 品項名稱 | 類別 | 克數 | 價格 | CP值 | 新增時間
+ * 品項名稱 | 類別 | 克數 | 價格 | CP值 | 日期 | 新增時間
+ *
+ * 「日期」是使用者自己填的購買日期；「新增時間」是系統自動寫入的紀錄時間，兩者不同，都要保留。
  */
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
@@ -74,13 +76,14 @@ function doPost(e) {
     const category = String(body.category || '').trim();
     const grams = Number(body.grams);
     const price = Number(body.price);
+    const date = String(body.date || '').trim();
 
     if (!name || !category || !(grams > 0) || isNaN(price)) {
       throw new Error('欄位不完整或格式錯誤');
     }
 
     const cp = +(price / grams).toFixed(4);
-    sheet.appendRow([name, category, grams, price, cp, new Date()]);
+    sheet.appendRow([name, category, grams, price, cp, date, new Date()]);
 
     return jsonOut_({ status: 'ok', cp });
   } catch (err) {
