@@ -477,7 +477,7 @@
       <div></div>
     </div>
     <div id="tableBody">
-      <div class="empty-state">請先在下方「設定」貼上你的 Google Apps Script 網址</div>
+      <div class="empty-state">載入中…</div>
     </div>
   </section>
 
@@ -502,7 +502,10 @@
   const LS_URL_KEY = "cp_tracker_script_url";
   const LS_CACHE_KEY = "cp_tracker_cache";
 
-  let scriptUrl = localStorage.getItem(LS_URL_KEY) || "";
+  // 內建預設同步網址：換過 Apps Script 網址的話改這裡就好
+  const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4SLRn8eRvg9pP4rrptYfbgIt3W5en2vrrfyUJG2SxpenrZp4D07wuRKiZDbIoMDq7/exec";
+
+  let scriptUrl = localStorage.getItem(LS_URL_KEY) || DEFAULT_SCRIPT_URL;
   let items = [];
   let activeCategory = "__all__";
   let searchTerm = "";
