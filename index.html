@@ -480,6 +480,26 @@
         <label for="itemDate">日期</label>
         <input type="date" id="itemDate">
       </div>
+      <div class="field full">
+        <label for="itemLocation">購買地點</label>
+        <select id="itemLocation">
+          <option value="">-- 選擇購買地點 --</option>
+          <option value="全聯線上">全聯線上</option>
+          <option value="全聯">全聯</option>
+          <option value="家樂福線上">家樂福線上</option>
+          <option value="PChome">PChome</option>
+          <option value="MoMo">MoMo</option>
+          <option value="蝦皮">蝦皮</option>
+          <option value="LG生活">LG生活</option>
+          <option value="花王特賣">花王特賣</option>
+          <option value="康是美">康是美</option>
+          <option value="寶雅">寶雅</option>
+          <option value="寶雅線上">寶雅線上</option>
+          <option value="屈臣氏">屈臣氏</option>
+          <option value="自行輸入">自行輸入…</option>
+        </select>
+        <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
+      </div>
 
       <button type="submit" id="addBtn">加入紀錄</button>
       <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
@@ -580,6 +600,40 @@
   itemGramsInput.addEventListener("input", updateCalc);
   itemPriceInput.addEventListener("input", updateCalc);
 
+  // ---------- 購買地點（預設清單 / 自行輸入） ----------
+  const itemLocationSelect = $("itemLocation");
+  const itemLocationCustom = $("itemLocationCustom");
+
+  itemLocationSelect.addEventListener("change", () => {
+    if(itemLocationSelect.value === "自行輸入"){
+      itemLocationCustom.style.display = "block";
+      itemLocationCustom.focus();
+    } else {
+      itemLocationCustom.style.display = "none";
+      itemLocationCustom.value = "";
+    }
+  });
+
+  function getLocationValue(){
+    if(itemLocationSelect.value === "自行輸入"){
+      return itemLocationCustom.value.trim();
+    }
+    return itemLocationSelect.value;
+  }
+
+  function setLocationValue(loc){
+    const preset = Array.from(itemLocationSelect.options).some(o => o.value === loc && o.value !== "自行輸入" && o.value !== "");
+    if(loc && !preset){
+      itemLocationSelect.value = "自行輸入";
+      itemLocationCustom.value = loc;
+      itemLocationCustom.style.display = "block";
+    } else {
+      itemLocationSelect.value = loc || "";
+      itemLocationCustom.value = "";
+      itemLocationCustom.style.display = "none";
+    }
+  }
+
   // ---------- 設定 ----------
   $("saveUrlBtn").addEventListener("click", () => {
     scriptUrl = scriptUrlInput.value.trim();
@@ -634,6 +688,7 @@
       price: price,
       cp: cp,
       date: raw["日期"] || "",
+      location: raw["地點"] || "",
       pending: false
     };
   }
@@ -670,7 +725,8 @@
             category: job.category,
             grams: job.grams,
             price: job.price,
-            date: job.date
+            date: job.date,
+            location: job.location
           })
         });
         job.failed = false;
@@ -700,13 +756,18 @@
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
     const date = itemDateInput.value || "";
+    const location = getLocationValue();
     if(!name || !category || !(grams > 0) || isNaN(price) || price < 0){
       formMsg.textContent = "請確認欄位都已正確填寫";
       return;
     }
+    if(itemLocationSelect.value === "自行輸入" && !location){
+      formMsg.textContent = "請輸入購買地點，或改選其他選項";
+      return;
+    }
 
     if(editingRow !== null){
-      submitUpdate(editingRow, { name, category, grams, price, date });
+      submitUpdate(editingRow, { name, category, grams, price, date, location });
       return;
     }
 
@@ -718,7 +779,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category, grams, price, cp, date,
+      name, category, grams, price, cp, date, location,
       pending: true,
       uploadError: false
     });
@@ -728,11 +789,12 @@
     // 表單立刻清空、聚焦回克數欄位，讓使用者可以馬上輸入下一筆
     $("addForm").reset();
     itemDateInput.value = date || new Date().toISOString().slice(0, 10);
+    setLocationValue("");
     formMsg.textContent = "";
     $("itemGrams").focus();
 
     // 真正的上傳丟進背景佇列處理，不 await，不擋住上面的畫面更新
-    uploadQueue.push({ tempId, name, category, grams, price, date });
+    uploadQueue.push({ tempId, name, category, grams, price, date, location });
     processQueue();
   });
 
@@ -748,6 +810,7 @@
     $("itemName").value = item.name;
     $("itemCategory").value = item.category;
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
+    setLocationValue(item.location || "");
     updateCalc();
     formTitle.textContent = "編輯品項";
     addBtn.textContent = "更新紀錄";
@@ -761,6 +824,7 @@
     editingRow = null;
     $("addForm").reset();
     itemDateInput.value = new Date().toISOString().slice(0, 10);
+    setLocationValue("");
     updateCalc();
     formTitle.textContent = "新增品項";
     addBtn.textContent = "加入紀錄";
@@ -779,6 +843,7 @@
       target.price = fields.price;
       target.cp = fields.price / fields.grams;
       target.date = fields.date;
+      target.location = fields.location;
       target.updating = true;
     }
     renderCategoryChips();
@@ -883,6 +948,7 @@
       const tier = item.pending ? "gray" : tierFor(item, sameCategory);
       const rowClass = "receipt-row" + (item.pending ? " pending" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
+      const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
       const actions = item.pending
         ? (item.uploadError
             ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
@@ -897,6 +963,7 @@
             ${escapeHtml(item.name)}
             <span class="cat-badge">${escapeHtml(item.category)}</span>
             ${dateBadge}
+            ${locationBadge}
           </div>
           <div class="num price-col">$${formatNum(item.price)}</div>
           <div class="num">${formatNum(item.grams)}g</div>
