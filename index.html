@@ -283,7 +283,7 @@
   }
   .receipt-row{
     display:grid;
-    grid-template-columns:2fr 1fr .8fr .8fr 1fr .9fr;
+    grid-template-columns:1.8fr .8fr .8fr .6fr .8fr .9fr .8fr;
     gap:6px;
     align-items:center;
     padding:12px 14px;
@@ -440,8 +440,8 @@
       grid-template-columns:1.5fr .7fr 1fr .9fr;
       font-size:12px;
     }
-    .receipt-row .price-col, .receipt-row .count-col{display:none;}
-    .receipt-row.head .price-col, .receipt-row.head .count-col{display:none;}
+    .receipt-row .price-col, .receipt-row .count-col, .receipt-row .grams-col{display:none;}
+    .receipt-row.head .price-col, .receipt-row.head .count-col, .receipt-row.head .grams-col{display:none;}
     form#addForm{grid-template-columns:1fr 1fr 1fr;}
     .calc-grid{grid-template-columns:1fr 1fr 1fr;}
   }
@@ -541,6 +541,7 @@
   <section class="receipt">
     <div class="receipt-row head">
       <div>品項 / 類別</div>
+      <div class="num grams-col">克數</div>
       <div class="num price-col">總價</div>
       <div class="num count-col">數量</div>
       <div class="num">單罐價</div>
@@ -992,6 +993,7 @@
             ${dateBadge}
             ${locationBadge}
           </div>
+          <div class="num grams-col">${formatNum(item.grams)}g</div>
           <div class="num price-col">$${formatNum(item.price)}</div>
           <div class="num count-col">${item.count}入</div>
           <div class="num">$${formatNum(item.unitPrice)}</div>
