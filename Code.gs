@@ -71,6 +71,25 @@ function doPost(e) {
       return jsonOut_({ status: 'ok' });
     }
 
+    if (body.action === 'update') {
+      const row = Number(body.row);
+      if (row < 2) throw new Error('無效的列號');
+      const name = String(body.name || '').trim();
+      const category = String(body.category || '').trim();
+      const grams = Number(body.grams);
+      const price = Number(body.price);
+      const date = String(body.date || '').trim();
+
+      if (!name || !category || !(grams > 0) || isNaN(price)) {
+        throw new Error('欄位不完整或格式錯誤');
+      }
+
+      const cp = +(price / grams).toFixed(4);
+      // 只更新前 6 欄（品項名稱～日期），第 7 欄「新增時間」維持原本紀錄不變
+      sheet.getRange(row, 1, 1, 6).setValues([[name, category, grams, price, cp, date]]);
+      return jsonOut_({ status: 'ok', cp });
+    }
+
     // 預設為新增品項
     const name = String(body.name || '').trim();
     const category = String(body.category || '').trim();

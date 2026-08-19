@@ -190,6 +190,18 @@
   }
   #addBtn:active{opacity:.7;}
   #addBtn:disabled{opacity:.5;cursor:not-allowed;}
+  #cancelEditBtn{
+    grid-column:1/-1;
+    font-family:'Space Mono', monospace;
+    font-size:13px;
+    padding:9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+    margin-top:-4px;
+  }
   #formMsg{
     grid-column:1/-1;
     font-size:13px;
@@ -339,6 +351,20 @@
     padding:2px 4px;
   }
   .receipt-row .del:hover{color:var(--red);}
+  .receipt-row .row-actions{
+    display:flex;
+    gap:2px;
+    justify-content:flex-end;
+  }
+  .receipt-row .edit{
+    background:none;
+    border:none;
+    color:var(--line);
+    cursor:pointer;
+    font-size:14px;
+    padding:2px 4px;
+  }
+  .receipt-row .edit:hover{color:var(--ink);}
   .empty-state{
     padding:40px 20px;
     text-align:center;
@@ -426,7 +452,7 @@
 
   <!-- 新增品項（先算再填資料） -->
   <section class="tag-card">
-    <p class="card-title">新增品項</p>
+    <p class="card-title" id="formTitle">新增品項</p>
     <form id="addForm">
       <div class="field">
         <label for="itemGrams">克數 (g)</label>
@@ -456,6 +482,7 @@
       </div>
 
       <button type="submit" id="addBtn">加入紀錄</button>
+      <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
       <div id="formMsg"></div>
     </form>
   </section>
@@ -678,6 +705,11 @@
       return;
     }
 
+    if(editingRow !== null){
+      submitUpdate(editingRow, { name, category, grams, price, date });
+      return;
+    }
+
     tempIdCounter += 1;
     const tempId = "pending-" + tempIdCounter;
     const cp = price / grams;
@@ -703,6 +735,68 @@
     uploadQueue.push({ tempId, name, category, grams, price, date });
     processQueue();
   });
+
+  // ---------- 編輯品項 ----------
+  const formTitle = $("formTitle");
+  const cancelEditBtn = $("cancelEditBtn");
+  let editingRow = null;
+
+  function startEdit(item){
+    editingRow = item.row;
+    $("itemGrams").value = item.grams;
+    $("itemPrice").value = item.price;
+    $("itemName").value = item.name;
+    $("itemCategory").value = item.category;
+    itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
+    updateCalc();
+    formTitle.textContent = "編輯品項";
+    addBtn.textContent = "更新紀錄";
+    cancelEditBtn.style.display = "block";
+    formMsg.textContent = "";
+    $("itemGrams").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("itemGrams").focus();
+  }
+
+  function endEdit(){
+    editingRow = null;
+    $("addForm").reset();
+    itemDateInput.value = new Date().toISOString().slice(0, 10);
+    updateCalc();
+    formTitle.textContent = "新增品項";
+    addBtn.textContent = "加入紀錄";
+    cancelEditBtn.style.display = "none";
+  }
+
+  cancelEditBtn.addEventListener("click", endEdit);
+
+  function submitUpdate(row, fields){
+    // 樂觀更新：畫面上馬上套用新的內容
+    const target = items.find(i => i.row === row);
+    if(target){
+      target.name = fields.name;
+      target.category = fields.category;
+      target.grams = fields.grams;
+      target.price = fields.price;
+      target.cp = fields.price / fields.grams;
+      target.date = fields.date;
+      target.updating = true;
+    }
+    renderCategoryChips();
+    renderTable();
+    endEdit();
+    formMsg.textContent = "";
+    syncText.textContent = "背景更新中…";
+
+    fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ action: "update", row, ...fields })
+    }).then(() => {
+      loadItems();
+    }).catch((err) => {
+      syncText.textContent = "更新失敗：" + err.message;
+    });
+  }
 
   // ---------- 刪除品項 ----------
   async function deleteItem(row){
@@ -789,11 +883,14 @@
       const tier = item.pending ? "gray" : tierFor(item, sameCategory);
       const rowClass = "receipt-row" + (item.pending ? " pending" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
-      const delOrStatus = item.pending
+      const actions = item.pending
         ? (item.uploadError
             ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
             : `<span class="pending-label" title="背景上傳中">⏳</span>`)
-        : `<button class="del" data-row="${item.row}" title="刪除">✕</button>`;
+        : `<div class="row-actions">
+             <button class="edit" data-row="${item.row}" title="編輯">✎</button>
+             <button class="del" data-row="${item.row}" title="刪除">✕</button>
+           </div>`;
       return `
         <div class="${rowClass}">
           <div class="name">
@@ -807,13 +904,19 @@
             <span class="dot ${tier}"></span>
             <span class="cp-val mono">${item.cp.toFixed(2)}</span>
           </div>
-          ${delOrStatus}
+          ${actions}
         </div>
       `;
     }).join("");
 
     tableBody.querySelectorAll(".del").forEach(btn => {
       btn.addEventListener("click", () => deleteItem(btn.dataset.row));
+    });
+    tableBody.querySelectorAll(".edit").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const item = items.find(i => String(i.row) === btn.dataset.row);
+        if(item) startEdit(item);
+      });
     });
   }
 
