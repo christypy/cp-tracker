@@ -626,11 +626,19 @@
 
   const LS_URL_KEY = "cp_tracker_script_url";
   const LS_CACHE_KEY = "cp_tracker_cache";
+  const LS_LOCATIONS_KEY = "cp_tracker_custom_locations";
 
   // 預設同步網址
   const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4SLRn8eRvg9pP4rrptYfbgIt3W5en2vrrfyUJG2SxpenrZp4D07wuRKiZDbIoMDq7/exec";
 
+  // 預設預設選單地點
+  const DEFAULT_LOCATIONS = [
+    "全聯線上", "全聯", "家樂福線上", "PChome", "MoMo", "蝦皮", 
+    "LG生活", "花王特賣", "康是美", "寶雅", "寶雅線上", "屈臣氏"
+  ];
+
   let scriptUrl = localStorage.getItem(LS_URL_KEY) || DEFAULT_SCRIPT_URL;
+  let customLocations = JSON.parse(localStorage.getItem(LS_LOCATIONS_KEY) || "[]");
   let items = [];
   let activeCategory = "__all__";
   let searchTerm = "";
@@ -675,9 +683,41 @@
   itemPriceInput.addEventListener("input", updateCalc);
   itemCountInput.addEventListener("input", updateCalc);
 
-  // ---------- 購買地點（預設清單 / 自行輸入） ----------
+  // ---------- 購買地點（記憶與動態渲染） ----------
   const itemLocationSelect = $("itemLocation");
   const itemLocationCustom = $("itemLocationCustom");
+
+  function renderLocationOptions(){
+    // 收集所有出現過的地點（包含預設、使用者新增、歷史紀錄）
+    const historyLocations = items.map(i => i.location).filter(Boolean);
+    const allLocations = Array.from(new Set([...DEFAULT_LOCATIONS, ...customLocations, ...historyLocations]));
+
+    const currentVal = getLocationValue();
+
+    // 清空並重新建立選單
+    itemLocationSelect.innerHTML = '<option value="">-- 選擇購買地點 --</option>';
+    allLocations.forEach(loc => {
+      const opt = document.createElement("option");
+      opt.value = loc;
+      opt.textContent = loc;
+      itemLocationSelect.appendChild(opt);
+    });
+
+    const customOpt = document.createElement("option");
+    customOpt.value = "自行輸入";
+    customOpt.textContent = "自行輸入…";
+    itemLocationSelect.appendChild(customOpt);
+
+    setLocationValue(currentVal);
+  }
+
+  function saveCustomLocation(loc){
+    if(!loc) return;
+    if(!DEFAULT_LOCATIONS.includes(loc) && !customLocations.includes(loc)){
+      customLocations.push(loc);
+      localStorage.setItem(LS_LOCATIONS_KEY, JSON.stringify(customLocations));
+    }
+  }
 
   itemLocationSelect.addEventListener("change", () => {
     if(itemLocationSelect.value === "自行輸入"){
@@ -697,15 +737,21 @@
   }
 
   function setLocationValue(loc){
-    const preset = Array.from(itemLocationSelect.options).some(o => o.value === loc && o.value !== "自行輸入" && o.value !== "");
-    if(loc && !preset){
+    if(!loc){
+      itemLocationSelect.value = "";
+      itemLocationCustom.value = "";
+      itemLocationCustom.style.display = "none";
+      return;
+    }
+    const preset = Array.from(itemLocationSelect.options).some(o => o.value === loc && o.value !== "自行輸入");
+    if(preset){
+      itemLocationSelect.value = loc;
+      itemLocationCustom.value = "";
+      itemLocationCustom.style.display = "none";
+    } else {
       itemLocationSelect.value = "自行輸入";
       itemLocationCustom.value = loc;
       itemLocationCustom.style.display = "block";
-    } else {
-      itemLocationSelect.value = loc || "";
-      itemLocationCustom.value = "";
-      itemLocationCustom.style.display = "none";
     }
   }
 
@@ -804,12 +850,14 @@
       items = [...stillPending, ...serverItems];
       localStorage.setItem(LS_CACHE_KEY, JSON.stringify(serverItems));
       syncText.textContent = "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"});
+      renderLocationOptions();
       renderCategoryChips();
       renderTable();
     }catch(err){
       const cached = localStorage.getItem(LS_CACHE_KEY);
       if(cached){
         items = JSON.parse(cached);
+        renderLocationOptions();
         renderCategoryChips();
         renderTable();
       }
@@ -912,6 +960,9 @@
       return;
     }
 
+    // 儲存新輸入的地點並刷新下拉選單
+    saveCustomLocation(location);
+
     const unitPrice = price / count;
     const cp = price / (grams * count);
 
@@ -930,6 +981,8 @@
       pending: true,
       uploadError: false
     });
+
+    renderLocationOptions();
     renderCategoryChips();
     renderTable();
 
@@ -995,6 +1048,7 @@
       target.location = fields.location;
       target.updating = true;
     }
+    renderLocationOptions();
     renderCategoryChips();
     renderTable();
     endEdit();
@@ -1154,10 +1208,13 @@
   }
 
   // ---------- 啟動 ----------
+  renderLocationOptions();
+
   const cached = localStorage.getItem(LS_CACHE_KEY);
   if(cached){
     try{
       items = JSON.parse(cached);
+      renderLocationOptions();
       renderCategoryChips();
       renderTable();
     }catch(e){}
