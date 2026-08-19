@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>划算度帳本 · CP值紀錄</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF7EF;
+    --paper-2:#F1ECDE;
+    --line:#DCD3B8;
+    --ink:#2B2820;
+    --ink-soft:#7A7263;
+    --red:#B7472A;
+    --green:#3F6B4F;
+    --amber:#B6862C;
+    --gold:#C9A227;
+    --white:#FFFDF8;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image:
+      radial-gradient(var(--line) 0.6px, transparent 0.6px);
+    background-size:22px 22px;
+    color:var(--ink);
+    font-family:'Noto Sans TC', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  .mono{font-family:'Space Mono', monospace;}
+
+  /* ---------- header ---------- */
+  header{
+    max-width:880px;
+    margin:0 auto;
+    padding:36px 20px 18px;
+    text-align:center;
+  }
+  header .eyebrow{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    letter-spacing:.18em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  header h1{
+    font-size:clamp(28px, 6vw, 40px);
+    margin:6px 0 4px;
+    font-weight:900;
+    letter-spacing:-.01em;
+  }
+  header p{
+    color:var(--ink-soft);
+    font-size:14px;
+    margin:0;
+  }
+
+  main{
+    max-width:880px;
+    margin:0 auto;
+    padding:0 16px;
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+  }
+
+  /* ---------- card base: price-tag paper ---------- */
+  .tag-card{
+    background:var(--white);
+    border-radius:var(--radius);
+    border:1px solid var(--line);
+    box-shadow:0 1px 0 var(--line), 0 8px 24px -18px rgba(43,40,32,.4);
+    padding:22px 20px 24px;
+    position:relative;
+  }
+  .tag-card::before{
+    /* punch hole */
+    content:"";
+    position:absolute;
+    top:-9px;
+    left:50%;
+    transform:translateX(-50%);
+    width:18px;
+    height:18px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:50%;
+    box-shadow:0 0 0 4px var(--white);
+  }
+  .card-title{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    font-family:'Space Mono', monospace;
+    margin:0 0 14px;
+    text-align:center;
+  }
+
+  /* ---------- quick calculator ---------- */
+  .calc-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    align-items:end;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .field label{
+    font-size:12px;
+    color:var(--ink-soft);
+    font-weight:500;
+  }
+  .field input, .field select{
+    font-family:'Space Mono', monospace;
+    font-size:17px;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+    color:var(--ink);
+    width:100%;
+  }
+  .field input:focus, .field select:focus{
+    outline:2px solid var(--gold);
+    outline-offset:1px;
+  }
+  .calc-result{
+    grid-column:1/-1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:16px;
+    margin-top:6px;
+    padding-top:16px;
+    border-top:1px dashed var(--line);
+  }
+  .stamp{
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size:26px;
+    padding:10px 18px;
+    border:3px solid var(--ink-soft);
+    border-radius:10px;
+    color:var(--ink-soft);
+    transform:rotate(-3deg);
+    transition:transform .15s ease, color .15s ease, border-color .15s ease;
+    white-space:nowrap;
+  }
+  .stamp.show{transform:rotate(-3deg) scale(1);}
+  .stamp small{
+    display:block;
+    font-size:10px;
+    letter-spacing:.1em;
+    font-weight:400;
+    text-align:center;
+    margin-top:2px;
+  }
+
+  /* ---------- add item form ---------- */
+  form#addForm{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  form#addForm .field.full{grid-column:1/-1;}
+  #addBtn{
+    grid-column:1/-1;
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:.04em;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    background:var(--ink);
+    color:var(--paper);
+    cursor:pointer;
+    transition:opacity .15s ease;
+  }
+  #addBtn:active{opacity:.7;}
+  #addBtn:disabled{opacity:.5;cursor:not-allowed;}
+  #formMsg{
+    grid-column:1/-1;
+    font-size:13px;
+    text-align:center;
+    min-height:16px;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- controls row ---------- */
+  .controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .chip{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--paper);
+  }
+  #searchInput{
+    font-family:'Noto Sans TC', sans-serif;
+    padding:8px 12px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    background:var(--white);
+    min-width:150px;
+    flex:1;
+    max-width:220px;
+  }
+  #syncStatus{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  #refreshBtn{
+    background:none;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 10px;
+    cursor:pointer;
+    font-size:14px;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- receipt table ---------- */
+  .receipt{
+    background:var(--white);
+    border-radius:var(--radius);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .receipt-row{
+    display:grid;
+    grid-template-columns:2.2fr 1fr .8fr 1fr .9fr;
+    gap:6px;
+    align-items:center;
+    padding:12px 14px;
+    border-bottom:1px dashed var(--line);
+  }
+  .receipt-row:last-child{border-bottom:none;}
+  .receipt-row.head{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    background:var(--paper-2);
+    border-bottom:1px solid var(--line);
+  }
+  .receipt-row .name{
+    font-weight:500;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .receipt-row .name .cat-badge{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    width:fit-content;
+  }
+  .receipt-row .num{
+    font-family:'Space Mono', monospace;
+    text-align:right;
+    font-size:13px;
+  }
+  .receipt-row .cp-cell{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:6px;
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    flex-shrink:0;
+  }
+  .dot.green{background:var(--green);}
+  .dot.amber{background:var(--amber);}
+  .dot.red{background:var(--red);}
+  .dot.gray{background:var(--ink-soft);}
+  .receipt-row .cp-val{
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size:14px;
+  }
+  .receipt-row .del{
+    background:none;
+    border:none;
+    color:var(--line);
+    cursor:pointer;
+    font-size:14px;
+    padding:2px 4px;
+  }
+  .receipt-row .del:hover{color:var(--red);}
+  .empty-state{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:14px;
+  }
+
+  /* ---------- settings ---------- */
+  details#settings{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 18px;
+  }
+  details#settings summary{
+    cursor:pointer;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:.06em;
+  }
+  .settings-body{
+    margin-top:14px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .settings-body input{
+    font-family:'Space Mono', monospace;
+    font-size:13px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+    width:100%;
+  }
+  .settings-body button{
+    align-self:flex-start;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    padding:8px 14px;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .settings-body p{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:0;
+    line-height:1.6;
+  }
+
+  footer{
+    text-align:center;
+    font-size:11px;
+    color:var(--ink-soft);
+    font-family:'Space Mono', monospace;
+    margin-top:30px;
+  }
+
+  /* ---------- mobile ---------- */
+  @media (max-width:560px){
+    .receipt-row{
+      grid-template-columns:1.6fr .7fr 1fr .9fr;
+      font-size:12px;
+    }
+    .receipt-row .price-col{display:none;}
+    .receipt-row.head .price-col{display:none;}
+    form#addForm{grid-template-columns:1fr 1fr;}
+    .calc-grid{grid-template-columns:1fr 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">$ / g Ledger</div>
+  <h1>划算度帳本</h1>
+  <p>輸入克數跟價格，馬上算出 CP 值 · 資料同步 Google 試算表</p>
+</header>
+
+<main>
+
+  <!-- 快速計算機 -->
+  <section class="tag-card">
+    <p class="card-title">快速試算</p>
+    <div class="calc-grid">
+      <div class="field">
+        <label for="calcGrams">克數 (g)</label>
+        <input type="number" id="calcGrams" inputmode="decimal" placeholder="例如 50">
+      </div>
+      <div class="field">
+        <label for="calcPrice">價格 ($)</label>
+        <input type="number" id="calcPrice" inputmode="decimal" placeholder="例如 380">
+      </div>
+      <div class="calc-result">
+        <div class="stamp mono" id="calcStamp">--<small>$ / g</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 新增品項 -->
+  <section class="tag-card">
+    <p class="card-title">新增品項</p>
+    <form id="addForm">
+      <div class="field full">
+        <label for="itemName">品項名稱</label>
+        <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
+      </div>
+      <div class="field">
+        <label for="itemCategory">類別</label>
+        <input type="text" id="itemCategory" list="categoryList" placeholder="例如 防曬" required>
+        <datalist id="categoryList"></datalist>
+      </div>
+      <div class="field">
+        <label for="itemGrams">克數 (g)</label>
+        <input type="number" id="itemGrams" inputmode="decimal" required>
+      </div>
+      <div class="field full">
+        <label for="itemPrice">價格 ($)</label>
+        <input type="number" id="itemPrice" inputmode="decimal" required>
+      </div>
+      <button type="submit" id="addBtn">加入紀錄</button>
+      <div id="formMsg"></div>
+    </form>
+  </section>
+
+  <!-- 篩選 / 搜尋 -->
+  <section class="controls">
+    <div class="chips" id="categoryChips">
+      <button class="chip active" data-cat="__all__">全部</button>
+    </div>
+    <input type="text" id="searchInput" placeholder="搜尋品項…">
+  </section>
+
+  <div id="syncStatus">
+    <span id="syncText">尚未同步</span>
+    <button id="refreshBtn" title="重新整理">↻</button>
+  </div>
+
+  <!-- 表格 -->
+  <section class="receipt">
+    <div class="receipt-row head">
+      <div>品項 / 類別</div>
+      <div class="num price-col">價格</div>
+      <div class="num">克數</div>
+      <div class="num">$ / g</div>
+      <div></div>
+    </div>
+    <div id="tableBody">
+      <div class="empty-state">請先在下方「設定」貼上你的 Google Apps Script 網址</div>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <details id="settings">
+    <summary>⚙ 設定同步網址</summary>
+    <div class="settings-body">
+      <p>把你部署好的 Google Apps Script 網頁應用程式網址貼在這裡（詳見附帶的 README 說明）。網址會存在這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
+      <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      <button id="saveUrlBtn">儲存網址</button>
+    </div>
+  </details>
+
+</main>
+
+<footer>手動記帳，理性剁手 · made for 划算度控</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  const LS_URL_KEY = "cp_tracker_script_url";
+  const LS_CACHE_KEY = "cp_tracker_cache";
+
+  let scriptUrl = localStorage.getItem(LS_URL_KEY) || "";
+  let items = [];
+  let activeCategory = "__all__";
+  let searchTerm = "";
+
+  const $ = (id) => document.getElementById(id);
+  const scriptUrlInput = $("scriptUrl");
+  const tableBody = $("tableBody");
+  const syncText = $("syncText");
+  const categoryChips = $("categoryChips");
+  const categoryList = $("categoryList");
+  const formMsg = $("formMsg");
+  const addBtn = $("addBtn");
+
+  scriptUrlInput.value = scriptUrl;
+
+  // ---------- 快速計算機 ----------
+  const calcGrams = $("calcGrams");
+  const calcPrice = $("calcPrice");
+  const calcStamp = $("calcStamp");
+
+  function updateCalc(){
+    const g = parseFloat(calcGrams.value);
+    const p = parseFloat(calcPrice.value);
+    if(g > 0 && p >= 0 && !isNaN(g) && !isNaN(p)){
+      const cp = p / g;
+      calcStamp.innerHTML = cp.toFixed(2) + "<small>$ / g</small>";
+      calcStamp.style.color = "var(--ink)";
+      calcStamp.style.borderColor = "var(--ink)";
+    } else {
+      calcStamp.innerHTML = "--<small>$ / g</small>";
+      calcStamp.style.color = "var(--ink-soft)";
+      calcStamp.style.borderColor = "var(--ink-soft)";
+    }
+  }
+  calcGrams.addEventListener("input", updateCalc);
+  calcPrice.addEventListener("input", updateCalc);
+
+  // ---------- 設定 ----------
+  $("saveUrlBtn").addEventListener("click", () => {
+    scriptUrl = scriptUrlInput.value.trim();
+    localStorage.setItem(LS_URL_KEY, scriptUrl);
+    formMsg.textContent = "";
+    loadItems();
+  });
+
+  $("refreshBtn").addEventListener("click", loadItems);
+
+  // ---------- 讀取資料 ----------
+  async function loadItems(){
+    if(!scriptUrl){
+      tableBody.innerHTML = '<div class="empty-state">請先在下方「設定」貼上你的 Google Apps Script 網址</div>';
+      syncText.textContent = "尚未設定同步網址";
+      return;
+    }
+    syncText.textContent = "同步中…";
+    try{
+      const res = await fetch(scriptUrl + "?t=" + Date.now());
+      const data = await res.json();
+      if(data.status !== "ok") throw new Error(data.message || "讀取失敗");
+      items = (data.items || []).map(normalizeItem);
+      localStorage.setItem(LS_CACHE_KEY, JSON.stringify(items));
+      syncText.textContent = "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"});
+      renderCategoryChips();
+      renderTable();
+    }catch(err){
+      // 同步失敗時退回本地快取
+      const cached = localStorage.getItem(LS_CACHE_KEY);
+      if(cached){
+        items = JSON.parse(cached);
+        renderCategoryChips();
+        renderTable();
+      }
+      syncText.textContent = "同步失敗，顯示上次快取（" + err.message + "）";
+    }
+  }
+
+  function normalizeItem(raw){
+    const grams = Number(raw["克數"]);
+    const price = Number(raw["價格"]);
+    const cp = grams > 0 ? price / grams : 0;
+    return {
+      row: raw["_row"],
+      name: raw["品項名稱"] || "",
+      category: raw["類別"] || "未分類",
+      grams: grams,
+      price: price,
+      cp: cp
+    };
+  }
+
+  // ---------- 新增品項 ----------
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if(!scriptUrl){
+      formMsg.textContent = "請先設定同步網址";
+      return;
+    }
+    const name = $("itemName").value.trim();
+    const category = $("itemCategory").value.trim();
+    const grams = parseFloat($("itemGrams").value);
+    const price = parseFloat($("itemPrice").value);
+    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0){
+      formMsg.textContent = "請確認欄位都已正確填寫";
+      return;
+    }
+    addBtn.disabled = true;
+    formMsg.textContent = "新增中…";
+    try{
+      // 用 text/plain 避免瀏覽器送出 CORS 預檢請求
+      await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({ action: "add", name, category, grams, price })
+      });
+      $("addForm").reset();
+      formMsg.textContent = "已加入！正在同步…";
+      await loadItems();
+      formMsg.textContent = "";
+    }catch(err){
+      formMsg.textContent = "新增失敗：" + err.message;
+    }finally{
+      addBtn.disabled = false;
+    }
+  });
+
+  // ---------- 刪除品項 ----------
+  async function deleteItem(row){
+    if(!scriptUrl) return;
+    if(!confirm("確定要刪除這筆紀錄嗎？")) return;
+    try{
+      await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({ action: "delete", row })
+      });
+      await loadItems();
+    }catch(err){
+      alert("刪除失敗：" + err.message);
+    }
+  }
+
+  // ---------- 類別篩選 ----------
+  function renderCategoryChips(){
+    const cats = Array.from(new Set(items.map(i => i.category))).sort();
+    categoryList.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join("");
+    categoryChips.innerHTML = "";
+    const allChip = document.createElement("button");
+    allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
+    allChip.textContent = "全部";
+    allChip.dataset.cat = "__all__";
+    allChip.addEventListener("click", () => { activeCategory = "__all__"; renderCategoryChips(); renderTable(); });
+    categoryChips.appendChild(allChip);
+    cats.forEach(c => {
+      const chip = document.createElement("button");
+      chip.className = "chip" + (activeCategory === c ? " active" : "");
+      chip.textContent = c;
+      chip.dataset.cat = c;
+      chip.addEventListener("click", () => { activeCategory = c; renderCategoryChips(); renderTable(); });
+      categoryChips.appendChild(chip);
+    });
+  }
+
+  $("searchInput").addEventListener("input", (e) => {
+    searchTerm = e.target.value.trim().toLowerCase();
+    renderTable();
+  });
+
+  // ---------- 表格渲染 ----------
+  function tierFor(item, sameCategory){
+    // 同類別中依 CP 值三分位決定顏色（划算 / 普通 / 偏貴）
+    if(sameCategory.length < 2) return "gray";
+    const sorted = sameCategory.slice().sort((a,b) => a.cp - b.cp);
+    const idx = sorted.indexOf(item);
+    const third = Math.ceil(sorted.length / 3);
+    if(idx < third) return "green";
+    if(idx < third * 2) return "amber";
+    return "red";
+  }
+
+  function renderTable(){
+    let list = items.filter(i => {
+      const matchCat = activeCategory === "__all__" || i.category === activeCategory;
+      const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
+      return matchCat && matchSearch;
+    });
+    list = list.slice().sort((a,b) => a.cp - b.cp);
+
+    if(list.length === 0){
+      tableBody.innerHTML = '<div class="empty-state">還沒有符合條件的紀錄</div>';
+      return;
+    }
+
+    tableBody.innerHTML = list.map(item => {
+      const sameCategory = items.filter(i => i.category === item.category);
+      const tier = tierFor(item, sameCategory);
+      return `
+        <div class="receipt-row">
+          <div class="name">
+            ${escapeHtml(item.name)}
+            <span class="cat-badge">${escapeHtml(item.category)}</span>
+          </div>
+          <div class="num price-col">$${formatNum(item.price)}</div>
+          <div class="num">${formatNum(item.grams)}g</div>
+          <div class="cp-cell">
+            <span class="dot ${tier}"></span>
+            <span class="cp-val mono">${item.cp.toFixed(2)}</span>
+          </div>
+          <button class="del" data-row="${item.row}" title="刪除">✕</button>
+        </div>
+      `;
+    }).join("");
+
+    tableBody.querySelectorAll(".del").forEach(btn => {
+      btn.addEventListener("click", () => deleteItem(btn.dataset.row));
+    });
+  }
+
+  function formatNum(n){
+    if(Number.isInteger(n)) return n.toString();
+    return n.toFixed(2).replace(/\.?0+$/, "");
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  // ---------- 啟動 ----------
+  const cached = localStorage.getItem(LS_CACHE_KEY);
+  if(cached){
+    try{
+      items = JSON.parse(cached);
+      renderCategoryChips();
+      renderTable();
+    }catch(e){}
+  }
+  loadItems();
+
+})();
+</script>
+
+</body>
+</html>
