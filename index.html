@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>划算度帳本 · CP值紀錄</title>
+<title>劃算度帳本 · CP值紀錄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -107,7 +107,7 @@
   /* ---------- quick calculator ---------- */
   .calc-grid{
     display:grid;
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:1fr 1fr 1fr;
     gap:14px;
     align-items:end;
   }
@@ -148,7 +148,7 @@
   .stamp{
     font-family:'Space Mono', monospace;
     font-weight:700;
-    font-size:26px;
+    font-size:24px;
     padding:10px 18px;
     border:3px solid var(--ink-soft);
     border-radius:10px;
@@ -156,6 +156,7 @@
     transform:rotate(-3deg);
     transition:transform .15s ease, color .15s ease, border-color .15s ease;
     white-space:nowrap;
+    text-align:center;
   }
   .stamp.show{transform:rotate(-3deg) scale(1);}
   .stamp small{
@@ -166,11 +167,17 @@
     text-align:center;
     margin-top:2px;
   }
+  .stamp .unit-p{
+    font-size:13px;
+    color:var(--ink-soft);
+    font-weight:500;
+    margin-top:4px;
+  }
 
   /* ---------- add item form ---------- */
   form#addForm{
     display:grid;
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:1fr 1fr 1fr;
     gap:14px;
   }
   form#addForm .field.full{grid-column:1/-1;}
@@ -276,7 +283,7 @@
   }
   .receipt-row{
     display:grid;
-    grid-template-columns:2.2fr 1fr .8fr 1fr .9fr;
+    grid-template-columns:2fr 1fr .8fr .8fr 1fr .9fr;
     gap:6px;
     align-items:center;
     padding:12px 14px;
@@ -430,13 +437,13 @@
   /* ---------- mobile ---------- */
   @media (max-width:560px){
     .receipt-row{
-      grid-template-columns:1.6fr .7fr 1fr .9fr;
+      grid-template-columns:1.5fr .7fr 1fr .9fr;
       font-size:12px;
     }
-    .receipt-row .price-col{display:none;}
-    .receipt-row.head .price-col{display:none;}
-    form#addForm{grid-template-columns:1fr 1fr;}
-    .calc-grid{grid-template-columns:1fr 1fr;}
+    .receipt-row .price-col, .receipt-row .count-col{display:none;}
+    .receipt-row.head .price-col, .receipt-row.head .count-col{display:none;}
+    form#addForm{grid-template-columns:1fr 1fr 1fr;}
+    .calc-grid{grid-template-columns:1fr 1fr 1fr;}
   }
 </style>
 </head>
@@ -444,8 +451,8 @@
 
 <header>
   <div class="eyebrow">$ / g Ledger</div>
-  <h1>划算度帳本</h1>
-  <p>輸入克數跟價格，馬上算出 CP 值 · 資料同步 Google 試算表</p>
+  <h1>劃算度帳本</h1>
+  <p>輸入克數跟價格，馬上算出 CP 值與單罐價格 · 資料同步 Google 試算表</p>
 </header>
 
 <main>
@@ -455,16 +462,23 @@
     <p class="card-title" id="formTitle">新增品項</p>
     <form id="addForm">
       <div class="field">
-        <label for="itemGrams">克數 (g)</label>
+        <label for="itemGrams">單罐克數 (g)</label>
         <input type="number" id="itemGrams" inputmode="decimal" placeholder="例如 50" required>
       </div>
       <div class="field">
-        <label for="itemPrice">價格 ($)</label>
+        <label for="itemPrice">總價格 ($)</label>
         <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
+      </div>
+      <div class="field">
+        <label for="itemCount">數量 (入/罐)</label>
+        <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="例如 1" required>
       </div>
 
       <div class="calc-result">
-        <div class="stamp mono" id="calcStamp">--<small>$ / g</small></div>
+        <div class="stamp mono" id="calcStamp">
+          --<small>$ / g</small>
+          <div class="unit-p" id="unitPricePreview">單罐 --</div>
+        </div>
       </div>
 
       <div class="field full">
@@ -527,8 +541,9 @@
   <section class="receipt">
     <div class="receipt-row head">
       <div>品項 / 類別</div>
-      <div class="num price-col">價格</div>
-      <div class="num">克數</div>
+      <div class="num price-col">總價</div>
+      <div class="num count-col">數量</div>
+      <div class="num">單罐價</div>
       <div class="num">$ / g</div>
       <div></div>
     </div>
@@ -541,7 +556,7 @@
   <details id="settings">
     <summary>⚙ 設定同步網址</summary>
     <div class="settings-body">
-      <p>把你部署好的 Google Apps Script 網頁應用程式網址貼在這裡（詳見附帶的 README 說明）。網址會存在這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
+      <p>把你部署好的 Google Apps Script 網頁應用程式網址貼在這裡。網址會存在這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
       <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
       <button id="saveUrlBtn">儲存網址</button>
     </div>
@@ -549,7 +564,7 @@
 
 </main>
 
-<footer>手動記帳，理性剁手 · made for 划算度控</footer>
+<footer>手動記帳，理性剁手 · made for 劃算度控</footer>
 
 <script>
 (function(){
@@ -558,7 +573,7 @@
   const LS_URL_KEY = "cp_tracker_script_url";
   const LS_CACHE_KEY = "cp_tracker_cache";
 
-  // 內建預設同步網址：換過 Apps Script 網址的話改這裡就好
+  // 預設同步網址
   const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4SLRn8eRvg9pP4rrptYfbgIt3W5en2vrrfyUJG2SxpenrZp4D07wuRKiZDbIoMDq7/exec";
 
   let scriptUrl = localStorage.getItem(LS_URL_KEY) || DEFAULT_SCRIPT_URL;
@@ -581,24 +596,30 @@
   // ---------- 新增表單內的即時試算 ----------
   const itemGramsInput = $("itemGrams");
   const itemPriceInput = $("itemPrice");
+  const itemCountInput = $("itemCount");
   const calcStamp = $("calcStamp");
 
   function updateCalc(){
     const g = parseFloat(itemGramsInput.value);
     const p = parseFloat(itemPriceInput.value);
-    if(g > 0 && p >= 0 && !isNaN(g) && !isNaN(p)){
-      const cp = p / g;
-      calcStamp.innerHTML = cp.toFixed(3) + "<small>$ / g</small>";
+    const count = parseInt(itemCountInput.value, 10) || 1;
+
+    if(g > 0 && p >= 0 && count > 0 && !isNaN(g) && !isNaN(p)){
+      const unitPrice = p / count;
+      const cp = p / (g * count);
+      calcStamp.innerHTML = cp.toFixed(3) + "<small>$ / g</small>" +
+                            "<div class='unit-p'>單罐 $" + formatNum(unitPrice) + "</div>";
       calcStamp.style.color = "var(--ink)";
       calcStamp.style.borderColor = "var(--ink)";
     } else {
-      calcStamp.innerHTML = "--<small>$ / g</small>";
+      calcStamp.innerHTML = "--<small>$ / g</small><div class='unit-p'>單罐 --</div>";
       calcStamp.style.color = "var(--ink-soft)";
       calcStamp.style.borderColor = "var(--ink-soft)";
     }
   }
   itemGramsInput.addEventListener("input", updateCalc);
   itemPriceInput.addEventListener("input", updateCalc);
+  itemCountInput.addEventListener("input", updateCalc);
 
   // ---------- 購買地點（預設清單 / 自行輸入） ----------
   const itemLocationSelect = $("itemLocation");
@@ -679,13 +700,17 @@
   function normalizeItem(raw){
     const grams = Number(raw["克數"]);
     const price = Number(raw["價格"]);
-    const cp = grams > 0 ? price / grams : 0;
+    const count = Number(raw["數量"]) || 1;
+    const unitPrice = raw["單罐價格"] !== undefined && raw["單罐價格"] !== "" ? Number(raw["單罐價格"]) : (count > 0 ? price / count : price);
+    const cp = (grams * count) > 0 ? price / (grams * count) : 0;
     return {
       row: raw["_row"],
       name: raw["品項名稱"] || "",
       category: raw["類別"] || "未分類",
       grams: grams,
       price: price,
+      count: count,
+      unitPrice: unitPrice,
       cp: cp,
       date: raw["日期"] || "",
       location: raw["地點"] || "",
@@ -693,9 +718,8 @@
     };
   }
 
-  // ---------- 新增品項（背景佇列上傳，不擋輸入） ----------
+  // ---------- 新增品項（背景佇列上傳） ----------
   const itemDateInput = $("itemDate");
-  // 預設帶入今天日期
   itemDateInput.value = new Date().toISOString().slice(0, 10);
 
   const uploadQueue = [];
@@ -725,6 +749,8 @@
             category: job.category,
             grams: job.grams,
             price: job.price,
+            count: job.count,
+            unitPrice: job.unitPrice,
             date: job.date,
             location: job.location
           })
@@ -741,7 +767,6 @@
       uploadQueue.shift();
     }
     isProcessingQueue = false;
-    // 佇列全部跑完後，重新整批同步一次，把試算表實際列號補回來
     await loadItems();
   }
 
@@ -755,9 +780,10 @@
     const category = $("itemCategory").value.trim();
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
+    const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
     const location = getLocationValue();
-    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0){
+    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
       formMsg.textContent = "請確認欄位都已正確填寫";
       return;
     }
@@ -766,35 +792,35 @@
       return;
     }
 
+    const unitPrice = price / count;
+    const cp = price / (grams * count);
+
     if(editingRow !== null){
-      submitUpdate(editingRow, { name, category, grams, price, date, location });
+      submitUpdate(editingRow, { name, category, grams, price, count, unitPrice, date, location });
       return;
     }
 
     tempIdCounter += 1;
     const tempId = "pending-" + tempIdCounter;
-    const cp = price / grams;
 
-    // 先樂觀地把這筆加進畫面上的列表，馬上就看得到，不用等網路
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category, grams, price, cp, date, location,
+      name, category, grams, price, count, unitPrice, cp, date, location,
       pending: true,
       uploadError: false
     });
     renderCategoryChips();
     renderTable();
 
-    // 表單立刻清空、聚焦回克數欄位，讓使用者可以馬上輸入下一筆
     $("addForm").reset();
+    $("itemCount").value = "1";
     itemDateInput.value = date || new Date().toISOString().slice(0, 10);
     setLocationValue("");
     formMsg.textContent = "";
     $("itemGrams").focus();
 
-    // 真正的上傳丟進背景佇列處理，不 await，不擋住上面的畫面更新
-    uploadQueue.push({ tempId, name, category, grams, price, date, location });
+    uploadQueue.push({ tempId, name, category, grams, price, count, unitPrice, date, location });
     processQueue();
   });
 
@@ -807,6 +833,7 @@
     editingRow = item.row;
     $("itemGrams").value = item.grams;
     $("itemPrice").value = item.price;
+    $("itemCount").value = item.count || 1;
     $("itemName").value = item.name;
     $("itemCategory").value = item.category;
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
@@ -823,6 +850,7 @@
   function endEdit(){
     editingRow = null;
     $("addForm").reset();
+    $("itemCount").value = "1";
     itemDateInput.value = new Date().toISOString().slice(0, 10);
     setLocationValue("");
     updateCalc();
@@ -834,14 +862,15 @@
   cancelEditBtn.addEventListener("click", endEdit);
 
   function submitUpdate(row, fields){
-    // 樂觀更新：畫面上馬上套用新的內容
     const target = items.find(i => i.row === row);
     if(target){
       target.name = fields.name;
       target.category = fields.category;
       target.grams = fields.grams;
       target.price = fields.price;
-      target.cp = fields.price / fields.grams;
+      target.count = fields.count;
+      target.unitPrice = fields.unitPrice;
+      target.cp = fields.price / (fields.grams * fields.count);
       target.date = fields.date;
       target.location = fields.location;
       target.updating = true;
@@ -866,7 +895,6 @@
   // ---------- 刪除品項 ----------
   async function deleteItem(row){
     if(String(row).startsWith("pending-")){
-      // 這筆還在背景上傳中或上傳失敗，還沒真正寫進試算表，直接從畫面上移除即可
       items = items.filter(i => i.row !== row);
       renderTable();
       return;
@@ -920,7 +948,6 @@
 
   // ---------- 表格渲染 ----------
   function tierFor(item, sameCategory){
-    // 同類別中依 CP 值三分位決定顏色（划算 / 普通 / 偏貴）
     if(sameCategory.length < 2) return "gray";
     const sorted = sameCategory.slice().sort((a,b) => a.cp - b.cp);
     const idx = sorted.indexOf(item);
@@ -966,7 +993,8 @@
             ${locationBadge}
           </div>
           <div class="num price-col">$${formatNum(item.price)}</div>
-          <div class="num">${formatNum(item.grams)}g</div>
+          <div class="num count-col">${item.count}入</div>
+          <div class="num">$${formatNum(item.unitPrice)}</div>
           <div class="cp-cell">
             <span class="dot ${tier}"></span>
             <span class="cp-val mono">${item.cp.toFixed(3)}</span>
