@@ -305,6 +305,26 @@
     flex-direction:column;
     gap:2px;
   }
+  .receipt-row .name-clickable{
+    cursor:pointer;
+    padding:4px;
+    margin:-4px;
+    border-radius:6px;
+    transition:background-color .15s ease;
+  }
+  .receipt-row .name-clickable:hover{
+    background-color:var(--paper-2);
+  }
+  .receipt-row .name-clickable::after{
+    content:" 🔍 比價";
+    font-size:10px;
+    color:var(--gold);
+    opacity:0;
+    transition:opacity .15s ease;
+  }
+  .receipt-row .name-clickable:hover::after{
+    opacity:1;
+  }
   .receipt-row .name .cat-badge{
     font-family:'Space Mono', monospace;
     font-size:10px;
@@ -463,7 +483,7 @@
     <form id="addForm">
       <div class="field">
         <label for="itemGrams">單罐克數 (g)</label>
-        <input type="number" id="itemGrams" inputmode="decimal"step="any" placeholder="例如 50" required>
+        <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
       </div>
       <div class="field">
         <label for="itemPrice">總價格 ($)</label>
@@ -540,7 +560,7 @@
   <!-- 表格 -->
   <section class="receipt">
     <div class="receipt-row head">
-      <div>品項 / 類別</div>
+      <div>品項 / 類別 (點擊名稱可比價)</div>
       <div class="num grams-col">克數</div>
       <div class="num price-col">總價</div>
       <div class="num count-col">數量</div>
@@ -564,6 +584,39 @@
   </details>
 
 </main>
+
+<!-- 比價彈窗 Modal -->
+<div id="compareModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div class="tag-card" style="width:90%; max-width:400px; margin:0; background:var(--white);">
+    <p class="card-title">快速比價計算</p>
+    <div style="font-size:15px; margin-bottom:6px; font-weight:700; text-align:center;" id="modalItemName">-</div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:16px; text-align:center;">
+      基準 CP 值：<span id="modalBaseCp" class="mono" style="font-weight:700; color:var(--ink);">-</span> $ / g(ml)
+    </div>
+    
+    <div class="calc-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="field">
+        <label for="modalGrams">新容量 (ml/g)</label>
+        <input type="number" id="modalGrams" inputmode="decimal" placeholder="例如 100">
+      </div>
+      <div class="field">
+        <label for="modalPrice">現場售價 ($)</label>
+        <input type="number" id="modalPrice" inputmode="decimal" placeholder="例如 150">
+      </div>
+    </div>
+
+    <div class="calc-result" style="flex-direction:column; gap:8px;">
+      <div style="font-size:13px; color:var(--ink-soft);">
+        等比例目標價：<strong id="modalTargetPrice" class="mono" style="font-size:20px; color:var(--ink);">$ --</strong>
+      </div>
+      <div id="modalVerdict" class="stamp mono" style="font-size:15px; padding:6px 12px; transform:none; display:none; margin-top:4px;">--</div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button type="button" id="closeModalBtn" style="flex:1; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); cursor:pointer; font-family:'Space Mono', monospace; font-size:13px;">關閉</button>
+    </div>
+  </div>
+</div>
 
 <footer>手動記帳，理性剁手 · made for 劃算度控</footer>
 
@@ -656,6 +709,74 @@
     }
   }
 
+  // ---------- 快速比價 Modal 邏輯 ----------
+  const compareModal = $("compareModal");
+  const modalItemName = $("modalItemName");
+  const modalBaseCp = $("modalBaseCp");
+  const modalGrams = $("modalGrams");
+  const modalPrice = $("modalPrice");
+  const modalTargetPrice = $("modalTargetPrice");
+  const modalVerdict = $("modalVerdict");
+  const closeModalBtn = $("closeModalBtn");
+
+  let activeCompareCp = 0;
+
+  function openCompareModal(item){
+    activeCompareCp = item.cp;
+    modalItemName.textContent = item.name;
+    modalBaseCp.textContent = item.cp.toFixed(3);
+    modalGrams.value = "";
+    modalPrice.value = "";
+    modalTargetPrice.textContent = "$ --";
+    modalVerdict.style.display = "none";
+    compareModal.style.display = "flex";
+    modalGrams.focus();
+  }
+
+  function calcComparison(){
+    const newGrams = parseFloat(modalGrams.value);
+    const newPrice = parseFloat(modalPrice.value);
+
+    if(newGrams > 0 && !isNaN(newGrams)){
+      const targetPrice = activeCompareCp * newGrams;
+      modalTargetPrice.textContent = "$" + targetPrice.toFixed(1);
+
+      if(!isNaN(newPrice) && newPrice >= 0){
+        modalVerdict.style.display = "block";
+        const diff = Math.abs(newPrice - targetPrice).toFixed(1);
+        if(newPrice < targetPrice){
+          modalVerdict.textContent = "🎉 更划算！(省 $" + diff + ")";
+          modalVerdict.style.color = "var(--green)";
+          modalVerdict.style.borderColor = "var(--green)";
+        } else if(newPrice > targetPrice){
+          modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff + ")";
+          modalVerdict.style.color = "var(--red)";
+          modalVerdict.style.borderColor = "var(--red)";
+        } else {
+          modalVerdict.textContent = "⚖ 劃算度相同";
+          modalVerdict.style.color = "var(--ink-soft)";
+          modalVerdict.style.borderColor = "var(--ink-soft)";
+        }
+      } else {
+        modalVerdict.style.display = "none";
+      }
+    } else {
+      modalTargetPrice.textContent = "$ --";
+      modalVerdict.style.display = "none";
+    }
+  }
+
+  modalGrams.addEventListener("input", calcComparison);
+  modalPrice.addEventListener("input", calcComparison);
+
+  closeModalBtn.addEventListener("click", () => {
+    compareModal.style.display = "none";
+  });
+
+  compareModal.addEventListener("click", (e) => {
+    if(e.target === compareModal) compareModal.style.display = "none";
+  });
+
   // ---------- 設定 ----------
   $("saveUrlBtn").addEventListener("click", () => {
     scriptUrl = scriptUrlInput.value.trim();
@@ -679,7 +800,6 @@
       const data = await res.json();
       if(data.status !== "ok") throw new Error(data.message || "讀取失敗");
       const serverItems = (data.items || []).map(normalizeItem);
-      // 保留還在背景佇列裡、尚未寫進試算表的暫存項目，避免刷新時消失
       const stillPending = items.filter(i => i.pending && uploadQueue.some(j => j.tempId === i.tempId));
       items = [...stillPending, ...serverItems];
       localStorage.setItem(LS_CACHE_KEY, JSON.stringify(serverItems));
@@ -687,7 +807,6 @@
       renderCategoryChips();
       renderTable();
     }catch(err){
-      // 同步失敗時退回本地快取
       const cached = localStorage.getItem(LS_CACHE_KEY);
       if(cached){
         items = JSON.parse(cached);
@@ -987,7 +1106,7 @@
            </div>`;
       return `
         <div class="${rowClass}">
-          <div class="name">
+          <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
             ${escapeHtml(item.name)}
             <span class="cat-badge">${escapeHtml(item.category)}</span>
             ${dateBadge}
@@ -1013,6 +1132,12 @@
       btn.addEventListener("click", () => {
         const item = items.find(i => String(i.row) === btn.dataset.row);
         if(item) startEdit(item);
+      });
+    });
+    tableBody.querySelectorAll(".name-clickable").forEach(el => {
+      el.addEventListener("click", () => {
+        const item = items.find(i => String(i.row) === el.dataset.row);
+        if(item) openCompareModal(item);
       });
     });
   }
