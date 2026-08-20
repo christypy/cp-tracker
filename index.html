@@ -350,11 +350,30 @@
     text-align:right;
     font-size:13px;
   }
+  /* stats group: on desktop its children become normal grid cells (display:contents),
+     on mobile it becomes a wrapping row of labeled chips */
+  .receipt-row .stats{
+    display:contents;
+  }
+  .receipt-row .stat{
+    font-family:'Space Mono', monospace;
+    text-align:right;
+    font-size:13px;
+  }
+  .receipt-row .stat-label{
+    display:none;
+  }
+  .receipt-row .stat-val{
+    font-weight:400;
+  }
   .receipt-row .cp-cell{
     display:flex;
     align-items:center;
     justify-content:flex-end;
     gap:6px;
+  }
+  .receipt-row .cp-cell .stat-label{
+    margin-right:auto;
   }
   .dot{
     width:8px;height:8px;border-radius:50%;
@@ -456,12 +475,64 @@
 
   /* ---------- mobile ---------- */
   @media (max-width:560px){
+    .receipt-row.head{display:none;} /* labels now shown inline per row instead */
+
     .receipt-row{
-      grid-template-columns:1.5fr .7fr 1fr .9fr;
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:8px 10px;
       font-size:12px;
+      padding:14px;
     }
-    .receipt-row .price-col, .receipt-row .count-col, .receipt-row .grams-col{display:none;}
-    .receipt-row.head .price-col, .receipt-row.head .count-col, .receipt-row.head .grams-col{display:none;}
+    .receipt-row .name{
+      flex:0 0 100%;
+    }
+    .receipt-row .stats{
+      display:flex;
+      flex-wrap:wrap;
+      flex:0 0 100%;
+      gap:6px 16px;
+    }
+    .receipt-row .stat{
+      display:flex;
+      align-items:baseline;
+      gap:4px;
+      text-align:left;
+    }
+    .receipt-row .stat-label{
+      display:inline;
+      font-size:10px;
+      letter-spacing:.04em;
+      color:var(--ink-soft);
+    }
+    .receipt-row .stat-val{
+      font-weight:700;
+      font-size:13px;
+    }
+    .receipt-row .cp-cell{
+      flex:1 1 auto;
+      justify-content:flex-start;
+      gap:8px;
+      padding-top:8px;
+      border-top:1px dashed var(--line);
+    }
+    .receipt-row .cp-cell .stat-label{
+      display:inline;
+      margin-right:0;
+    }
+    .receipt-row .cp-val{
+      font-size:15px;
+    }
+    .receipt-row .row-actions,
+    .receipt-row .pending-label,
+    .receipt-row > .del{
+      flex:0 0 auto;
+      margin-left:auto;
+      padding-top:8px;
+      border-top:1px dashed var(--line);
+    }
+
     form#addForm{grid-template-columns:1fr 1fr 1fr;}
     .calc-grid{grid-template-columns:1fr 1fr 1fr;}
   }
@@ -561,10 +632,12 @@
   <section class="receipt">
     <div class="receipt-row head">
       <div>品項 / 類別 (點擊名稱可比價)</div>
-      <div class="num grams-col">克數</div>
-      <div class="num price-col">總價</div>
-      <div class="num count-col">數量</div>
-      <div class="num">單罐價</div>
+      <div class="stats">
+        <div class="stat grams-col">克數</div>
+        <div class="stat price-col">總價</div>
+        <div class="stat count-col">數量</div>
+        <div class="stat">單罐價</div>
+      </div>
       <div class="num">$ / g</div>
       <div></div>
     </div>
@@ -1166,11 +1239,14 @@
             ${dateBadge}
             ${locationBadge}
           </div>
-          <div class="num grams-col">${formatNum(item.grams)}g</div>
-          <div class="num price-col">$${formatNum(item.price)}</div>
-          <div class="num count-col">${item.count}入</div>
-          <div class="num">$${formatNum(item.unitPrice)}</div>
+          <div class="stats">
+            <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
+            <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
+            <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
+            <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
+          </div>
           <div class="cp-cell">
+            <span class="stat-label mono">$/g</span>
             <span class="dot ${tier}"></span>
             <span class="cp-val mono">${item.cp.toFixed(3)}</span>
           </div>
