@@ -684,11 +684,9 @@
 
     <div class="calc-result" style="flex-direction:column; gap:8px;">
       <div style="font-size:13px; color:var(--ink-soft);">
-        等比例目標價：<strong id="modalTargetPrice" class="mono" style="font-size:20px; color:var(--ink);">$ --</strong>
+        <span id="modalTargetLabel">等比例目標</span>：<strong id="modalTargetValue" class="mono" style="font-size:20px; color:var(--ink);">--</strong>
       </div>
-      <div id="modalBreakevenGrams" style="font-size:12px; color:var(--ink-soft); display:none;">
-        打平所需容量（未填容量時的估算）：約 <span class="mono" style="font-weight:700; color:var(--ink);"></span> g(ml)
-      </div>
+      <div id="modalTargetHint" style="font-size:11px; color:var(--ink-soft); display:none;"></div>
       <div id="modalUnitCp" style="font-size:12px; color:var(--ink-soft); display:none;">
         換算後 CP 值：<span class="mono" style="font-weight:700; color:var(--ink);"></span> $ / g(ml)
       </div>
@@ -845,15 +843,16 @@
   const modalGrams = $("modalGrams");
   const modalCount = $("modalCount");
   const modalPrice = $("modalPrice");
-  const modalTargetPrice = $("modalTargetPrice");
-  const modalBreakevenGrams = $("modalBreakevenGrams");
-  const modalBreakevenGramsVal = modalBreakevenGrams.querySelector("span");
+  const modalTargetLabel = $("modalTargetLabel");
+  const modalTargetValue = $("modalTargetValue");
+  const modalTargetHint = $("modalTargetHint");
   const modalUnitCp = $("modalUnitCp");
   const modalUnitCpVal = modalUnitCp.querySelector("span");
   const modalVerdict = $("modalVerdict");
   const closeModalBtn = $("closeModalBtn");
 
   let activeCompareCp = 0;
+  const EPSILON = 0.05; // 價格容許誤差（四捨五入/浮點數用），在此範圍內視為「一樣划算」
 
   function openCompareModal(item){
     activeCompareCp = item.cp;
@@ -869,42 +868,55 @@
     modalGrams.select();
   }
 
-  function calcComparison(){
-    const newGrams = parseFloat(modalGrams.value);
-    const newCount = parseInt(modalCount.value, 10) || 1;
-    const newPrice = parseFloat(modalPrice.value);
-    const hasGrams = newGrams > 0 && !isNaN(newGrams);
-    const hasPrice = !isNaN(newPrice) && newPrice >= 0;
+  function resetResult(){
+    modalTargetLabel.textContent = "等比例目標";
+    modalTargetValue.textContent = "--";
+    modalTargetHint.style.display = "none";
+    modalUnitCp.style.display = "none";
+    modalVerdict.style.display = "none";
+  }
 
-    // 只要有「數量＋售價」，不管有沒有填容量，都先估算打平所需的容量，
-    // 讓使用者可以馬上跟包裝上標示的容量比對，不用等全部欄位都填完
-    if(hasPrice && newCount > 0){
-      const breakevenGrams = activeCompareCp > 0 ? newPrice / (newCount * activeCompareCp) : 0;
-      modalBreakevenGrams.style.display = "block";
-      modalBreakevenGramsVal.textContent = breakevenGrams > 0 ? breakevenGrams.toFixed(1) : "--";
-    } else {
-      modalBreakevenGrams.style.display = "none";
+  function calcComparison(){
+    const gramsRaw = modalGrams.value.trim();
+    const priceRaw = modalPrice.value.trim();
+    const countRaw = modalCount.value.trim();
+
+    const newGrams = parseFloat(gramsRaw);
+    const newPrice = parseFloat(priceRaw);
+    // 數量至少為 1，避免使用者清空或輸入 0 / 負數時算式壞掉
+    let newCount = parseInt(countRaw, 10);
+    if(!(newCount > 0)) newCount = 1;
+
+    const hasGrams = gramsRaw !== "" && newGrams > 0 && !isNaN(newGrams);
+    const hasPrice = priceRaw !== "" && !isNaN(newPrice) && newPrice >= 0;
+    const hasBaseCp = activeCompareCp > 0;
+
+    resetResult();
+
+    if(!hasBaseCp || (!hasGrams && !hasPrice)){
+      return;
     }
 
-    if(hasGrams && newCount > 0){
-      // 目標「總價」＝基準 CP 值 × 單件容量 × 數量（例如：3包一起賣，換算成等值的目標總價）
+    if(hasGrams){
+      // 已知「單件容量 × 數量」→ 反推打平所需的售價（目標售價）
       const targetPrice = activeCompareCp * newGrams * newCount;
-      modalTargetPrice.textContent = "$" + targetPrice.toFixed(1);
+      modalTargetLabel.textContent = "等比例目標價";
+      modalTargetValue.textContent = "$" + targetPrice.toFixed(1);
 
       if(hasPrice){
-        // 換算後這筆組合價的實際 CP 值：總價 / (單件容量 × 數量)
+        // 兩邊都填了，直接算出這次交易實際的 CP 值，並跟基準比較
         const newCp = newPrice / (newGrams * newCount);
         modalUnitCp.style.display = "block";
         modalUnitCpVal.textContent = newCp.toFixed(3);
 
         modalVerdict.style.display = "block";
-        const diff = Math.abs(newPrice - targetPrice).toFixed(1);
-        if(newPrice < targetPrice){
-          modalVerdict.textContent = "🎉 更划算！(省 $" + diff + ")";
+        const diff = newPrice - targetPrice;
+        if(diff < -EPSILON){
+          modalVerdict.textContent = "🎉 更划算！(省 $" + Math.abs(diff).toFixed(1) + ")";
           modalVerdict.style.color = "var(--green)";
           modalVerdict.style.borderColor = "var(--green)";
-        } else if(newPrice > targetPrice){
-          modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff + ")";
+        } else if(diff > EPSILON){
+          modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff.toFixed(1) + ")";
           modalVerdict.style.color = "var(--red)";
           modalVerdict.style.borderColor = "var(--red)";
         } else {
@@ -913,13 +925,16 @@
           modalVerdict.style.borderColor = "var(--ink-soft)";
         }
       } else {
-        modalUnitCp.style.display = "none";
-        modalVerdict.style.display = "none";
+        modalTargetHint.style.display = "block";
+        modalTargetHint.textContent = "填入現場售價即可看到判斷結果";
       }
     } else {
-      modalTargetPrice.textContent = "$ --";
-      modalUnitCp.style.display = "none";
-      modalVerdict.style.display = "none";
+      // 沒有（或還不知道）容量，但已知數量與售價 → 反推打平所需的容量（目標容量）
+      const targetGrams = newPrice / (activeCompareCp * newCount);
+      modalTargetLabel.textContent = "目標容量";
+      modalTargetValue.textContent = (targetGrams > 0 ? targetGrams.toFixed(1) : "0") + " g(ml)";
+      modalTargetHint.style.display = "block";
+      modalTargetHint.textContent = "容量 ≥ 這個數字才划算，找到包裝標示的容量後可填入比對";
     }
   }
 
