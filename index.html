@@ -669,11 +669,15 @@
     
     <div class="calc-grid" style="grid-template-columns:1fr 1fr;">
       <div class="field">
-        <label for="modalGrams">新容量 (ml/g)</label>
+        <label for="modalGrams">單件容量 (ml/g)</label>
         <input type="number" id="modalGrams" inputmode="decimal" placeholder="例如 100">
       </div>
       <div class="field">
-        <label for="modalPrice">現場售價 ($)</label>
+        <label for="modalCount">數量 (入/包)</label>
+        <input type="number" id="modalCount" inputmode="numeric" min="1" value="1" placeholder="例如 2">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label for="modalPrice">現場售價 ($，全部數量的總價)</label>
         <input type="number" id="modalPrice" inputmode="decimal" placeholder="例如 150">
       </div>
     </div>
@@ -681,6 +685,9 @@
     <div class="calc-result" style="flex-direction:column; gap:8px;">
       <div style="font-size:13px; color:var(--ink-soft);">
         等比例目標價：<strong id="modalTargetPrice" class="mono" style="font-size:20px; color:var(--ink);">$ --</strong>
+      </div>
+      <div id="modalUnitCp" style="font-size:12px; color:var(--ink-soft); display:none;">
+        換算後 CP 值：<span class="mono" style="font-weight:700; color:var(--ink);"></span> $ / g(ml)
       </div>
       <div id="modalVerdict" class="stamp mono" style="font-size:15px; padding:6px 12px; transform:none; display:none; margin-top:4px;">--</div>
     </div>
@@ -833,8 +840,11 @@
   const modalItemName = $("modalItemName");
   const modalBaseCp = $("modalBaseCp");
   const modalGrams = $("modalGrams");
+  const modalCount = $("modalCount");
   const modalPrice = $("modalPrice");
   const modalTargetPrice = $("modalTargetPrice");
+  const modalUnitCp = $("modalUnitCp");
+  const modalUnitCpVal = modalUnitCp.querySelector("span");
   const modalVerdict = $("modalVerdict");
   const closeModalBtn = $("closeModalBtn");
 
@@ -845,8 +855,10 @@
     modalItemName.textContent = item.name;
     modalBaseCp.textContent = item.cp.toFixed(3);
     modalGrams.value = "";
+    modalCount.value = "1";
     modalPrice.value = "";
     modalTargetPrice.textContent = "$ --";
+    modalUnitCp.style.display = "none";
     modalVerdict.style.display = "none";
     compareModal.style.display = "flex";
     modalGrams.focus();
@@ -854,13 +866,20 @@
 
   function calcComparison(){
     const newGrams = parseFloat(modalGrams.value);
+    const newCount = parseInt(modalCount.value, 10) || 1;
     const newPrice = parseFloat(modalPrice.value);
 
-    if(newGrams > 0 && !isNaN(newGrams)){
-      const targetPrice = activeCompareCp * newGrams;
+    if(newGrams > 0 && !isNaN(newGrams) && newCount > 0){
+      // 目標「總價」＝基準 CP 值 × 單件容量 × 數量（例如：3包一起賣，換算成等值的目標總價）
+      const targetPrice = activeCompareCp * newGrams * newCount;
       modalTargetPrice.textContent = "$" + targetPrice.toFixed(1);
 
       if(!isNaN(newPrice) && newPrice >= 0){
+        // 換算後這筆組合價的實際 CP 值：總價 / (單件容量 × 數量)
+        const newCp = newPrice / (newGrams * newCount);
+        modalUnitCp.style.display = "block";
+        modalUnitCpVal.textContent = newCp.toFixed(3);
+
         modalVerdict.style.display = "block";
         const diff = Math.abs(newPrice - targetPrice).toFixed(1);
         if(newPrice < targetPrice){
@@ -877,15 +896,18 @@
           modalVerdict.style.borderColor = "var(--ink-soft)";
         }
       } else {
+        modalUnitCp.style.display = "none";
         modalVerdict.style.display = "none";
       }
     } else {
       modalTargetPrice.textContent = "$ --";
+      modalUnitCp.style.display = "none";
       modalVerdict.style.display = "none";
     }
   }
 
   modalGrams.addEventListener("input", calcComparison);
+  modalCount.addEventListener("input", calcComparison);
   modalPrice.addEventListener("input", calcComparison);
 
   closeModalBtn.addEventListener("click", () => {
