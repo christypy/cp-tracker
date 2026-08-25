@@ -418,6 +418,30 @@
     font-size:14px;
   }
 
+  /* ---------- grouped by product name (different sizes together) ---------- */
+  .group-block + .group-block{
+    border-top:6px solid var(--paper-2);
+  }
+  .group-header{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.04em;
+    color:var(--ink-soft);
+    background:var(--paper-2);
+    padding:8px 14px;
+    border-bottom:1px dashed var(--line);
+  }
+  .receipt-row.grouped{
+    border-left:3px solid var(--line);
+  }
+  .best-badge{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    color:var(--green);
+    margin-left:2px;
+    white-space:nowrap;
+  }
+
   /* ---------- settings ---------- */
   details#settings{
     background:var(--white);
@@ -693,6 +717,18 @@
       <div id="modalVerdict" class="stamp mono" style="font-size:15px; padding:6px 12px; transform:none; display:none; margin-top:4px;">--</div>
     </div>
 
+    <div id="modalSaveSection" style="display:none; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line);">
+      <div class="field" style="margin-bottom:10px;">
+        <label for="modalLocation">🎉 更划算！在哪裡找到這個價格？</label>
+        <select id="modalLocation">
+          <option value="">-- 選擇購買地點 --</option>
+        </select>
+        <input type="text" id="modalLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
+      </div>
+      <button type="button" id="modalSaveBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:var(--green); color:var(--white); cursor:pointer; font-family:'Space Mono', monospace; font-size:13px; font-weight:700;">💾 儲存這筆更划算的紀錄</button>
+      <div id="modalSaveMsg" style="font-size:12px; text-align:center; margin-top:8px; color:var(--ink-soft);"></div>
+    </div>
+
     <div style="display:flex; gap:10px; margin-top:20px;">
       <button type="button" id="closeModalBtn" style="flex:1; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); cursor:pointer; font-family:'Space Mono', monospace; font-size:13px;">關閉</button>
     </div>
@@ -767,29 +803,62 @@
   // ---------- 購買地點（記憶與動態渲染） ----------
   const itemLocationSelect = $("itemLocation");
   const itemLocationCustom = $("itemLocationCustom");
+  const modalLocationSelect = $("modalLocation");
+  const modalLocationCustom = $("modalLocationCustom");
 
-  function renderLocationOptions(){
+  function getLocationValue(selectEl, customEl){
+    if(selectEl.value === "自行輸入"){
+      return customEl.value.trim();
+    }
+    return selectEl.value;
+  }
+
+  function setLocationValue(selectEl, customEl, loc){
+    if(!loc){
+      selectEl.value = "";
+      customEl.value = "";
+      customEl.style.display = "none";
+      return;
+    }
+    const preset = Array.from(selectEl.options).some(o => o.value === loc && o.value !== "自行輸入");
+    if(preset){
+      selectEl.value = loc;
+      customEl.value = "";
+      customEl.style.display = "none";
+    } else {
+      selectEl.value = "自行輸入";
+      customEl.value = loc;
+      customEl.style.display = "block";
+    }
+  }
+
+  function buildLocationOptions(selectEl, customEl){
     // 收集所有出現過的地點（包含預設、使用者新增、歷史紀錄）
     const historyLocations = items.map(i => i.location).filter(Boolean);
     const allLocations = Array.from(new Set([...DEFAULT_LOCATIONS, ...customLocations, ...historyLocations]));
 
-    const currentVal = getLocationValue();
+    const currentVal = getLocationValue(selectEl, customEl);
 
     // 清空並重新建立選單
-    itemLocationSelect.innerHTML = '<option value="">-- 選擇購買地點 --</option>';
+    selectEl.innerHTML = '<option value="">-- 選擇購買地點 --</option>';
     allLocations.forEach(loc => {
       const opt = document.createElement("option");
       opt.value = loc;
       opt.textContent = loc;
-      itemLocationSelect.appendChild(opt);
+      selectEl.appendChild(opt);
     });
 
     const customOpt = document.createElement("option");
     customOpt.value = "自行輸入";
     customOpt.textContent = "自行輸入…";
-    itemLocationSelect.appendChild(customOpt);
+    selectEl.appendChild(customOpt);
 
-    setLocationValue(currentVal);
+    setLocationValue(selectEl, customEl, currentVal);
+  }
+
+  function renderLocationOptions(){
+    buildLocationOptions(itemLocationSelect, itemLocationCustom);
+    buildLocationOptions(modalLocationSelect, modalLocationCustom);
   }
 
   function saveCustomLocation(loc){
@@ -800,41 +869,19 @@
     }
   }
 
-  itemLocationSelect.addEventListener("change", () => {
-    if(itemLocationSelect.value === "自行輸入"){
-      itemLocationCustom.style.display = "block";
-      itemLocationCustom.focus();
-    } else {
-      itemLocationCustom.style.display = "none";
-      itemLocationCustom.value = "";
-    }
-  });
-
-  function getLocationValue(){
-    if(itemLocationSelect.value === "自行輸入"){
-      return itemLocationCustom.value.trim();
-    }
-    return itemLocationSelect.value;
+  function bindLocationToggle(selectEl, customEl){
+    selectEl.addEventListener("change", () => {
+      if(selectEl.value === "自行輸入"){
+        customEl.style.display = "block";
+        customEl.focus();
+      } else {
+        customEl.style.display = "none";
+        customEl.value = "";
+      }
+    });
   }
-
-  function setLocationValue(loc){
-    if(!loc){
-      itemLocationSelect.value = "";
-      itemLocationCustom.value = "";
-      itemLocationCustom.style.display = "none";
-      return;
-    }
-    const preset = Array.from(itemLocationSelect.options).some(o => o.value === loc && o.value !== "自行輸入");
-    if(preset){
-      itemLocationSelect.value = loc;
-      itemLocationCustom.value = "";
-      itemLocationCustom.style.display = "none";
-    } else {
-      itemLocationSelect.value = "自行輸入";
-      itemLocationCustom.value = loc;
-      itemLocationCustom.style.display = "block";
-    }
-  }
+  bindLocationToggle(itemLocationSelect, itemLocationCustom);
+  bindLocationToggle(modalLocationSelect, modalLocationCustom);
 
   // ---------- 快速比價 Modal 邏輯 ----------
   const compareModal = $("compareModal");
@@ -850,18 +897,26 @@
   const modalUnitCpVal = modalUnitCp.querySelector("span");
   const modalVerdict = $("modalVerdict");
   const closeModalBtn = $("closeModalBtn");
+  const modalSaveSection = $("modalSaveSection");
+  const modalSaveBtn = $("modalSaveBtn");
+  const modalSaveMsg = $("modalSaveMsg");
 
   let activeCompareCp = 0;
+  let activeCompareItem = null;
   const EPSILON = 0.05; // 價格容許誤差（四捨五入/浮點數用），在此範圍內視為「一樣划算」
 
   function openCompareModal(item){
     activeCompareCp = item.cp;
+    activeCompareItem = item;
     modalItemName.textContent = item.name;
     modalBaseCp.textContent = item.cp.toFixed(3);
     // 先帶入原始紀錄的數值，使用者只需要改動有變化的欄位即可即時比較
     modalGrams.value = item.grams;
     modalCount.value = item.count || 1;
     modalPrice.value = item.price;
+    setLocationValue(modalLocationSelect, modalLocationCustom, "");
+    modalSaveSection.style.display = "none";
+    modalSaveMsg.textContent = "";
     compareModal.style.display = "flex";
     calcComparison();
     modalGrams.focus();
@@ -874,6 +929,7 @@
     modalTargetHint.style.display = "none";
     modalUnitCp.style.display = "none";
     modalVerdict.style.display = "none";
+    modalSaveSection.style.display = "none";
   }
 
   function calcComparison(){
@@ -915,6 +971,7 @@
           modalVerdict.textContent = "🎉 更划算！(省 $" + Math.abs(diff).toFixed(1) + ")";
           modalVerdict.style.color = "var(--green)";
           modalVerdict.style.borderColor = "var(--green)";
+          modalSaveSection.style.display = "block";
         } else if(diff > EPSILON){
           modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff.toFixed(1) + ")";
           modalVerdict.style.color = "var(--red)";
@@ -941,6 +998,76 @@
   modalGrams.addEventListener("input", calcComparison);
   modalCount.addEventListener("input", calcComparison);
   modalPrice.addEventListener("input", calcComparison);
+
+  // 比價後如果比原本更划算，要求輸入地點並存成新的一筆紀錄
+  function saveCompareAsNewRecord(){
+    if(!activeCompareItem){
+      modalSaveMsg.textContent = "找不到比對的品項";
+      modalSaveMsg.style.color = "var(--red)";
+      return;
+    }
+    if(!scriptUrl){
+      modalSaveMsg.textContent = "請先在下方「設定」貼上同步網址";
+      modalSaveMsg.style.color = "var(--red)";
+      return;
+    }
+    const newGrams = parseFloat(modalGrams.value);
+    const newPrice = parseFloat(modalPrice.value);
+    let newCount = parseInt(modalCount.value, 10);
+    if(!(newCount > 0)) newCount = 1;
+
+    if(!(newGrams > 0) || isNaN(newPrice) || newPrice < 0){
+      modalSaveMsg.textContent = "請確認容量與售價已正確填寫";
+      modalSaveMsg.style.color = "var(--red)";
+      return;
+    }
+
+    const location = getLocationValue(modalLocationSelect, modalLocationCustom);
+    if(!location){
+      modalSaveMsg.textContent = "請輸入或選擇購買地點";
+      modalSaveMsg.style.color = "var(--red)";
+      modalLocationSelect.focus();
+      return;
+    }
+
+    saveCustomLocation(location);
+
+    const unitPrice = newPrice / newCount;
+    const cp = newPrice / (newGrams * newCount);
+    const date = new Date().toISOString().slice(0, 10);
+    const name = activeCompareItem.name;
+    const category = activeCompareItem.category;
+
+    tempIdCounter += 1;
+    const tempId = "pending-" + tempIdCounter;
+
+    items.unshift({
+      row: tempId,
+      tempId: tempId,
+      name, category,
+      grams: newGrams,
+      price: newPrice,
+      count: newCount,
+      unitPrice, cp, date, location,
+      pending: true,
+      uploadError: false
+    });
+
+    renderLocationOptions();
+    renderCategoryChips();
+    renderTable();
+
+    uploadQueue.push({ tempId, name, category, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
+    processQueue();
+
+    modalSaveMsg.textContent = "✓ 已加入紀錄，背景同步中…";
+    modalSaveMsg.style.color = "var(--green)";
+    setTimeout(() => {
+      compareModal.style.display = "none";
+    }, 900);
+  }
+
+  modalSaveBtn.addEventListener("click", saveCompareAsNewRecord);
 
   closeModalBtn.addEventListener("click", () => {
     compareModal.style.display = "none";
@@ -1077,7 +1204,7 @@
     const price = parseFloat($("itemPrice").value);
     const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
-    const location = getLocationValue();
+    const location = getLocationValue(itemLocationSelect, itemLocationCustom);
     if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
       formMsg.textContent = "請確認欄位都已正確填寫";
       return;
@@ -1116,7 +1243,7 @@
     $("addForm").reset();
     $("itemCount").value = "1";
     itemDateInput.value = date || new Date().toISOString().slice(0, 10);
-    setLocationValue("");
+    setLocationValue(itemLocationSelect, itemLocationCustom, "");
     formMsg.textContent = "";
     $("itemGrams").focus();
 
@@ -1137,7 +1264,7 @@
     $("itemName").value = item.name;
     $("itemCategory").value = item.category;
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
-    setLocationValue(item.location || "");
+    setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
     formTitle.textContent = "編輯品項";
     addBtn.textContent = "更新紀錄";
@@ -1152,7 +1279,7 @@
     $("addForm").reset();
     $("itemCount").value = "1";
     itemDateInput.value = new Date().toISOString().slice(0, 10);
-    setLocationValue("");
+    setLocationValue(itemLocationSelect, itemLocationCustom, "");
     updateCalc();
     formTitle.textContent = "新增品項";
     addBtn.textContent = "加入紀錄";
@@ -1264,49 +1391,89 @@
       const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
       return matchCat && matchSearch;
     });
-    list = list.slice().sort((a,b) => sortAsc ? a.cp - b.cp : b.cp - a.cp);
 
     if(list.length === 0){
       tableBody.innerHTML = '<div class="empty-state">還沒有符合條件的紀錄</div>';
       return;
     }
 
-    tableBody.innerHTML = list.map(item => {
-      const sameCategory = items.filter(i => i.category === item.category && !i.pending);
-      const tier = item.pending ? "gray" : tierFor(item, sameCategory);
-      const rowClass = "receipt-row" + (item.pending ? " pending" : "");
-      const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
-      const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
-      const actions = item.pending
-        ? (item.uploadError
-            ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
-            : `<span class="pending-label" title="背景上傳中">⏳</span>`)
-        : `<div class="row-actions">
-             <button class="edit" data-row="${item.row}" title="編輯">✎</button>
-             <button class="del" data-row="${item.row}" title="刪除">✕</button>
-           </div>`;
-      return `
-        <div class="${rowClass}">
-          <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            ${escapeHtml(item.name)}
-            <span class="cat-badge">${escapeHtml(item.category)}</span>
-            ${dateBadge}
-            ${locationBadge}
+    // ---- 依品項名稱分組：同個產品即使 ml/g 數不同，也整合在一起方便比較 ----
+    const groupOrder = [];
+    const groupsMap = new Map();
+    list.forEach(item => {
+      const key = item.name.trim().toLowerCase();
+      if(!groupsMap.has(key)){
+        groupsMap.set(key, []);
+        groupOrder.push(key);
+      }
+      groupsMap.get(key).push(item);
+    });
+
+    const groups = groupOrder.map(key => {
+      const arr = groupsMap.get(key).slice().sort((a,b) => a.cp - b.cp); // 組內固定依 CP 值由低到高，方便比價
+      return { items: arr, bestCp: arr[0].cp };
+    });
+
+    // 組與組之間依目前排序方向（依各組最划算的 CP 值）排序
+    groups.sort((a,b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
+
+    tableBody.innerHTML = groups.map(group => {
+      const arr = group.items;
+      const multi = arr.length > 1;
+      const groupHeader = multi
+        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／通路，已依 CP 值排序</div>`
+        : "";
+
+      const rows = arr.map((item, idx) => {
+        let tier;
+        if(item.pending){
+          tier = "gray";
+        } else if(multi){
+          // 組內比較：組內最便宜為綠、最貴為紅、其餘為黃
+          if(idx === 0) tier = "green";
+          else if(idx === arr.length - 1) tier = "red";
+          else tier = "amber";
+        } else {
+          const sameCategory = items.filter(i => i.category === item.category && !i.pending);
+          tier = tierFor(item, sameCategory);
+        }
+        const bestBadge = (multi && idx === 0 && !item.pending) ? `<span class="best-badge">🏆 組內最划算</span>` : "";
+        const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "");
+        const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
+        const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
+        const actions = item.pending
+          ? (item.uploadError
+              ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
+              : `<span class="pending-label" title="背景上傳中">⏳</span>`)
+          : `<div class="row-actions">
+               <button class="edit" data-row="${item.row}" title="編輯">✎</button>
+               <button class="del" data-row="${item.row}" title="刪除">✕</button>
+             </div>`;
+        return `
+          <div class="${rowClass}">
+            <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
+              ${escapeHtml(item.name)} ${bestBadge}
+              <span class="cat-badge">${escapeHtml(item.category)}</span>
+              ${dateBadge}
+              ${locationBadge}
+            </div>
+            <div class="stats">
+              <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
+              <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
+              <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
+              <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
+            </div>
+            <div class="cp-cell">
+              <span class="stat-label mono">$/g</span>
+              <span class="dot ${tier}"></span>
+              <span class="cp-val mono">${item.cp.toFixed(3)}</span>
+            </div>
+            ${actions}
           </div>
-          <div class="stats">
-            <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
-            <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
-            <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
-            <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
-          </div>
-          <div class="cp-cell">
-            <span class="stat-label mono">$/g</span>
-            <span class="dot ${tier}"></span>
-            <span class="cp-val mono">${item.cp.toFixed(3)}</span>
-          </div>
-          ${actions}
-        </div>
-      `;
+        `;
+      }).join("");
+
+      return `<div class="group-block">${groupHeader}${rows}</div>`;
     }).join("");
 
     tableBody.querySelectorAll(".del").forEach(btn => {
