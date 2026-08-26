@@ -1389,6 +1389,33 @@
   $("refreshBtn").addEventListener("click", loadItems);
 
   // ---------- 讀取資料 ----------
+  // 帶重試與更清楚錯誤訊息的 JSON 讀取（Apps Script 偶爾會回傳 HTML 而非 JSON）
+  async function fetchJson(url, options, retries){
+    if(retries === undefined) retries = 1;
+    let lastErr;
+    for(let attempt = 0; attempt <= retries; attempt++){
+      try{
+        const res = await fetch(url, options);
+        const text = await res.text();
+        try{
+          return JSON.parse(text);
+        }catch(parseErr){
+          if(text.trim().slice(0, 1) === "<"){
+            throw new Error("Google 回傳了網頁而非資料，可能是 Apps Script 部署權限（需設為「任何人」）或暫時性問題");
+          }
+          throw parseErr;
+        }
+      }catch(err){
+        lastErr = err;
+        if(attempt < retries){
+          await new Promise(r => setTimeout(r, 700));
+          continue;
+        }
+      }
+    }
+    throw lastErr;
+  }
+
   async function loadItems(){
     if(!scriptUrl){
       tableBody.innerHTML = '<div class="empty-state">請先在下方「設定」貼上你的 Google Apps Script 網址</div>';
@@ -1397,8 +1424,7 @@
     }
     syncText.textContent = "同步中…";
     try{
-      const res = await fetch(scriptUrl + "?t=" + Date.now());
-      const data = await res.json();
+      const data = await fetchJson(scriptUrl + "?t=" + Date.now());
       if(data.status !== "ok") throw new Error(data.message || "讀取失敗");
       const serverItems = (data.items || []).map(normalizeItem);
       const stillPending = items.filter(i => i.pending && uploadQueue.some(j => j.tempId === i.tempId));
