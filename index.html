@@ -1583,8 +1583,16 @@
     $("itemName").value = item.name;
     selectedCategories = (item.categories || []).slice();
     renderSelectedCategoryChips();
-    categoryParentSelect.value = "";
-    renderCategoryChildOptions();
+    renderCategoryParentOptions();
+    if(selectedCategories.length){
+      const { parent, child } = splitCategoryPath(selectedCategories[0]);
+      categoryParentSelect.value = parent;
+      renderCategoryChildOptions();
+      categoryChildSelect.value = child;
+    } else {
+      categoryParentSelect.value = "";
+      renderCategoryChildOptions();
+    }
     categoryManualRow.style.display = "none";
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
