@@ -271,12 +271,62 @@
     max-width:220px;
   }
   #syncStatus{
+    max-width:880px;
+    width:calc(100% - 32px);
+    box-sizing:border-box;
+    margin:0 auto 18px;
     font-family:'Space Mono', monospace;
-    font-size:11px;
+    font-size:12px;
     color:var(--ink-soft);
     display:flex;
     align-items:center;
-    gap:8px;
+    gap:10px;
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:9px 16px;
+    box-shadow:0 1px 0 var(--line), 0 6px 16px -12px rgba(43,40,32,.4);
+  }
+  #syncStatus .sync-dot{
+    width:9px;
+    height:9px;
+    min-width:9px;
+    border-radius:50%;
+    background:var(--ink-soft);
+    box-shadow:0 0 0 3px rgba(122,114,99,.15);
+    transition:background .2s, box-shadow .2s;
+  }
+  #syncStatus.state-syncing .sync-dot{
+    background:var(--amber);
+    box-shadow:0 0 0 3px rgba(182,134,44,.18);
+    animation:syncPulse 1s ease-in-out infinite;
+  }
+  #syncStatus.state-ok .sync-dot{
+    background:var(--green);
+    box-shadow:0 0 0 3px rgba(63,107,79,.16);
+  }
+  #syncStatus.state-error .sync-dot{
+    background:var(--red);
+    box-shadow:0 0 0 3px rgba(183,71,42,.16);
+  }
+  @keyframes syncPulse{
+    0%,100%{ opacity:1; }
+    50%{ opacity:.4; }
+  }
+  #syncStatus .sync-main{
+    display:flex;
+    flex-direction:column;
+    line-height:1.35;
+    flex:1;
+    min-width:0;
+  }
+  #syncStatus .sync-url{
+    font-size:10px;
+    color:var(--ink-soft);
+    opacity:.7;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   #refreshBtn{
     background:none;
@@ -286,6 +336,7 @@
     cursor:pointer;
     font-size:14px;
     color:var(--ink-soft);
+    flex:none;
   }
 
   /* ---------- receipt table ---------- */
@@ -714,6 +765,15 @@
   <p>輸入克數跟價格，馬上算出 CP 值與單罐價格 · 資料同步 Google 試算表</p>
 </header>
 
+<div id="syncStatus">
+  <span class="sync-dot"></span>
+  <div class="sync-main">
+    <span id="syncText">尚未同步</span>
+    <span class="sync-url" id="syncUrlDisplay"></span>
+  </div>
+  <button id="refreshBtn" title="重新整理">↻</button>
+</div>
+
 <main>
 
   <!-- 新增品項（先算再填資料） -->
@@ -810,11 +870,6 @@
   </section>
 
   <div id="categoryStatsBar"></div>
-
-  <div id="syncStatus">
-    <span id="syncText">尚未同步</span>
-    <button id="refreshBtn" title="重新整理">↻</button>
-  </div>
 
   <!-- 表格 -->
   <section class="receipt">
@@ -929,13 +984,26 @@
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
   const tableBody = $("tableBody");
+  const syncStatusEl = $("syncStatus");
   const syncText = $("syncText");
+  const syncUrlDisplay = $("syncUrlDisplay");
   const categoryChips = $("categoryChips");
   const formMsg = $("formMsg");
   const addBtn = $("addBtn");
   const categoryStatsBar = $("categoryStatsBar");
 
   scriptUrlInput.value = scriptUrl;
+
+  // 同步狀態列：更新圓點顏色 + 顯示目前使用的同步網址
+  function setSyncState(state, text){
+    syncStatusEl.classList.remove("state-syncing", "state-ok", "state-error");
+    if(state) syncStatusEl.classList.add("state-" + state);
+    if(text !== undefined) syncText.textContent = text;
+    syncUrlDisplay.textContent = scriptUrl
+      ? ("已連接 · " + scriptUrl.replace(/^https?:\/\//, ""))
+      : "尚未設定同步網址";
+  }
+  setSyncState(null, "尚未同步");
 
   // ---------- 類別（主類別／子類別，可複選）管理 ----------
   const CATEGORY_SEP = "/";
@@ -1419,10 +1487,10 @@
   async function loadItems(){
     if(!scriptUrl){
       tableBody.innerHTML = '<div class="empty-state">請先在下方「設定」貼上你的 Google Apps Script 網址</div>';
-      syncText.textContent = "尚未設定同步網址";
+      setSyncState(null, "尚未設定同步網址");
       return;
     }
-    syncText.textContent = "同步中…";
+    setSyncState("syncing", "同步中…");
     try{
       const data = await fetchJson(scriptUrl + "?t=" + Date.now());
       if(data.status !== "ok") throw new Error(data.message || "讀取失敗");
@@ -1430,7 +1498,7 @@
       const stillPending = items.filter(i => i.pending && uploadQueue.some(j => j.tempId === i.tempId));
       items = [...stillPending, ...serverItems];
       localStorage.setItem(LS_CACHE_KEY, JSON.stringify(serverItems));
-      syncText.textContent = "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"});
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
       renderTable();
@@ -1442,7 +1510,7 @@
         renderCategoryChips();
         renderTable();
       }
-      syncText.textContent = "同步失敗，顯示上次快取（" + err.message + "）";
+      setSyncState("error", "同步失敗，顯示上次快取（" + err.message + "）");
     }
   }
 
@@ -1494,7 +1562,7 @@
   function updateQueueStatus(){
     const n = uploadQueue.length + (isProcessingQueue ? 1 : 0);
     if(n > 0){
-      syncText.textContent = "背景上傳中…（剩餘 " + n + " 筆）";
+      setSyncState("syncing", "背景上傳中…（剩餘 " + n + " 筆）");
     }
   }
 
@@ -1665,7 +1733,7 @@
     renderTable();
     endEdit();
     formMsg.textContent = "";
-    syncText.textContent = "背景更新中…";
+    setSyncState("syncing", "背景更新中…");
 
     fetch(scriptUrl, {
       method: "POST",
@@ -1674,7 +1742,7 @@
     }).then(() => {
       loadItems();
     }).catch((err) => {
-      syncText.textContent = "更新失敗：" + err.message;
+      setSyncState("error", "更新失敗：" + err.message);
     });
   }
 
