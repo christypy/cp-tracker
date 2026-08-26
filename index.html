@@ -1694,9 +1694,8 @@
     const groups = groupOrder.map(key => {
       const arr = groupsMap.get(key).slice().sort((a,b) => a.cp - b.cp); // 組內固定依 CP 值由低到高，方便比價
 
-      // 代表項目：優先挑「1入」中最划算的；若組內沒有 1 入，則退回整體最划算的那個
-      const singles = arr.filter(i => (i.count || 1) === 1);
-      const rep = singles.length ? singles.slice().sort((a,b) => a.cp - b.cp)[0] : arr[0];
+      // 代表項目：直接取整組中 CP 值最划算的那一筆（不論入數）
+      const rep = arr[0];
       const others = arr.filter(i => i !== rep);
 
       return { key, items: arr, rep, others, bestCp: arr[0].cp };
@@ -1727,7 +1726,9 @@
         `<span class="rank-badge" title="在「${escapeHtml(r.cat)}」類別中依 CP 值由低到高排名，數字越小越划算">${escapeHtml(r.cat)} 第${r.rank}名／${r.total}</span>`
       ).join("");
       const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
-      const singleBadge = (isRep && multi && (item.count || 1) === 1) ? `<span class="best-badge">・1入</span>` : "";
+      const convertedBadge = (isRep && multi && (item.count || 1) > 1)
+        ? `<span class="best-badge" title="換算成單一件（1入）在同樣克數/毫升下的價格">・換算1入：$${formatNum(item.unitPrice)}／${formatNum(item.grams)}g</span>`
+        : "";
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
@@ -1743,7 +1744,7 @@
       return `
         <div class="${rowClass}">
           <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            ${escapeHtml(item.name)} ${bestBadge}${singleBadge}${rankBadge}
+            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${rankBadge}
             <span class="cat-badge-group">${catBadges}</span>
             ${dateBadge}
             ${locationBadge}
@@ -1768,7 +1769,7 @@
       const { key, items: arr, rep, others } = group;
       const multi = arr.length > 1;
       const groupHeader = multi
-        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／數量／通路，預設顯示 1 入且最划算的紀錄</div>`
+        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／數量／通路，預設顯示整組最划算的紀錄（多入會換算成1入價格）</div>`
         : "";
 
       const repRow = renderRow(rep, { isRep: true, multi, isBestOfGroup: true, sub: false });
