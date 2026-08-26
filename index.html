@@ -441,6 +441,134 @@
     margin-left:2px;
     white-space:nowrap;
   }
+  .rank-badge{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    color:var(--white);
+    background:var(--gold);
+    padding:1px 7px;
+    border-radius:999px;
+    margin-left:2px;
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .sub-toggle{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.03em;
+    color:var(--ink-soft);
+    background:var(--paper-2);
+    border:none;
+    border-top:1px dashed var(--line);
+    width:100%;
+    text-align:left;
+    padding:8px 14px;
+    cursor:pointer;
+  }
+  .sub-toggle:hover{color:var(--ink);}
+  .sub-items{
+    background:var(--paper);
+  }
+  .receipt-row.sub-row{
+    padding-left:26px;
+    background:var(--paper);
+  }
+  .receipt-row.sub-row .name{
+    font-weight:400;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- category multi-select input ---------- */
+  .cat-input-row{
+    display:flex;
+    gap:8px;
+  }
+  .cat-input-row select{flex:1;}
+  .cat-manual-btn{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    white-space:nowrap;
+    padding:0 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .cat-manual-btn:hover{color:var(--ink); border-color:var(--ink);}
+  .cat-manual-row{
+    display:flex;
+    gap:8px;
+    margin-top:8px;
+  }
+  .cat-manual-row input{
+    flex:1;
+    font-family:'Noto Sans TC', sans-serif;
+    font-size:14px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+  }
+  .cat-manual-row button{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    padding:0 14px;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .cat-chips-selected{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:10px;
+  }
+  .cat-chips-selected:empty{margin-top:0;}
+  .cat-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    padding:5px 6px 5px 12px;
+    border-radius:999px;
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .cat-chip-x{
+    background:none;
+    border:none;
+    color:var(--paper);
+    opacity:.7;
+    cursor:pointer;
+    font-size:11px;
+    padding:2px 6px;
+  }
+  .cat-chip-x:hover{opacity:1;}
+  .receipt-row .name .cat-badge-group{
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+  }
+
+  /* ---------- category average stats bar ---------- */
+  #categoryStatsBar{
+    display:none;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:8px 16px;
+    text-align:center;
+  }
+  #categoryStatsBar.show{display:block;}
+  #categoryStatsBar strong{color:var(--ink);}
 
   /* ---------- settings ---------- */
   details#settings{
@@ -601,9 +729,18 @@
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
       </div>
       <div class="field full">
-        <label for="itemCategory">類別</label>
-        <input type="text" id="itemCategory" list="categoryList" placeholder="例如 防曬" required>
-        <datalist id="categoryList"></datalist>
+        <label>類別（可複選）</label>
+        <div class="cat-input-row">
+          <select id="categoryDropdown">
+            <option value="">-- 選擇既有類別 --</option>
+          </select>
+          <button type="button" id="categoryManualBtn" class="cat-manual-btn">✎ 手動輸入</button>
+        </div>
+        <div class="cat-manual-row" id="categoryManualRow" style="display:none;">
+          <input type="text" id="categoryManualInput" placeholder="輸入新類別，Enter 或點新增">
+          <button type="button" id="categoryManualAddBtn">新增</button>
+        </div>
+        <div class="cat-chips-selected" id="categoryChipsSelected"></div>
       </div>
       <div class="field full">
         <label for="itemDate">日期</label>
@@ -646,6 +783,8 @@
       <input type="text" id="searchInput" placeholder="搜尋品項…">
     </div>
   </section>
+
+  <div id="categoryStatsBar"></div>
 
   <div id="syncStatus">
     <span id="syncText">尚未同步</span>
@@ -760,17 +899,89 @@
   let activeCategory = "__all__";
   let searchTerm = "";
   let sortAsc = true;
+  let expandedGroups = new Set();
 
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
   const tableBody = $("tableBody");
   const syncText = $("syncText");
   const categoryChips = $("categoryChips");
-  const categoryList = $("categoryList");
   const formMsg = $("formMsg");
   const addBtn = $("addBtn");
+  const categoryStatsBar = $("categoryStatsBar");
 
   scriptUrlInput.value = scriptUrl;
+
+  // ---------- 類別（可複選）管理 ----------
+  const categoryDropdown = $("categoryDropdown");
+  const categoryManualBtn = $("categoryManualBtn");
+  const categoryManualRow = $("categoryManualRow");
+  const categoryManualInput = $("categoryManualInput");
+  const categoryManualAddBtn = $("categoryManualAddBtn");
+  const categoryChipsSelectedEl = $("categoryChipsSelected");
+  let selectedCategories = [];
+
+  function getAllKnownCategories(){
+    const set = new Set();
+    items.forEach(i => (i.categories || []).forEach(c => { if(c) set.add(c); }));
+    return Array.from(set).sort();
+  }
+
+  function renderCategoryDropdownOptions(){
+    const known = getAllKnownCategories();
+    categoryDropdown.innerHTML = '<option value="">-- 選擇既有類別 --</option>' +
+      known.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  }
+
+  function renderSelectedCategoryChips(){
+    categoryChipsSelectedEl.innerHTML = selectedCategories.map(c => `
+      <span class="cat-chip">${escapeHtml(c)}<button type="button" class="cat-chip-x" data-cat="${escapeHtml(c)}">✕</button></span>
+    `).join("");
+    categoryChipsSelectedEl.querySelectorAll(".cat-chip-x").forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedCategories = selectedCategories.filter(c => c !== btn.dataset.cat);
+        renderSelectedCategoryChips();
+      });
+    });
+  }
+
+  function addSelectedCategory(cat){
+    cat = String(cat || "").trim();
+    if(!cat) return;
+    if(!selectedCategories.includes(cat)) selectedCategories.push(cat);
+    renderSelectedCategoryChips();
+  }
+
+  function resetCategorySelection(){
+    selectedCategories = [];
+    renderSelectedCategoryChips();
+    categoryDropdown.value = "";
+    categoryManualInput.value = "";
+    categoryManualRow.style.display = "none";
+  }
+
+  categoryDropdown.addEventListener("change", () => {
+    if(categoryDropdown.value){
+      addSelectedCategory(categoryDropdown.value);
+      categoryDropdown.value = "";
+    }
+  });
+
+  categoryManualBtn.addEventListener("click", () => {
+    const showing = categoryManualRow.style.display !== "none";
+    categoryManualRow.style.display = showing ? "none" : "flex";
+    if(!showing) categoryManualInput.focus();
+  });
+
+  function commitManualCategory(){
+    addSelectedCategory(categoryManualInput.value);
+    categoryManualInput.value = "";
+    categoryManualInput.focus();
+  }
+  categoryManualAddBtn.addEventListener("click", commitManualCategory);
+  categoryManualInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); commitManualCategory(); }
+  });
 
   // ---------- 新增表單內的即時試算 ----------
   const itemGramsInput = $("itemGrams");
@@ -1036,7 +1247,8 @@
     const cp = newPrice / (newGrams * newCount);
     const date = new Date().toISOString().slice(0, 10);
     const name = activeCompareItem.name;
-    const category = activeCompareItem.category;
+    const categories = (activeCompareItem.categories || []).slice();
+    const category = categories.join(",");
 
     tempIdCounter += 1;
     const tempId = "pending-" + tempIdCounter;
@@ -1044,7 +1256,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category,
+      name, categories,
       grams: newGrams,
       price: newPrice,
       count: newCount,
@@ -1110,7 +1322,7 @@
     }catch(err){
       const cached = localStorage.getItem(LS_CACHE_KEY);
       if(cached){
-        items = JSON.parse(cached);
+        items = JSON.parse(cached).map(migrateItem);
         renderLocationOptions();
         renderCategoryChips();
         renderTable();
@@ -1119,16 +1331,32 @@
     }
   }
 
+  // 相容舊版快取資料（舊版只有單一 category 字串，沒有 categories 陣列）
+  function migrateItem(item){
+    if(!item.categories || !item.categories.length){
+      item.categories = item.category ? parseCategories(item.category) : ["未分類"];
+    }
+    return item;
+  }
+
+  function parseCategories(str){
+    return String(str || "")
+      .split(/[,、;]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+
   function normalizeItem(raw){
     const grams = Number(raw["克數"]);
     const price = Number(raw["價格"]);
     const count = Number(raw["數量"]) || 1;
     const unitPrice = raw["單罐價格"] !== undefined && raw["單罐價格"] !== "" ? Number(raw["單罐價格"]) : (count > 0 ? price / count : price);
     const cp = (grams * count) > 0 ? price / (grams * count) : 0;
+    const categories = parseCategories(raw["類別"]);
     return {
       row: raw["_row"],
       name: raw["品項名稱"] || "",
-      category: raw["類別"] || "未分類",
+      categories: categories.length ? categories : ["未分類"],
       grams: grams,
       price: price,
       count: count,
@@ -1199,14 +1427,15 @@
       return;
     }
     const name = $("itemName").value.trim();
-    const category = $("itemCategory").value.trim();
+    const categories = selectedCategories.slice();
+    const category = categories.join(",");
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
     const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
     const location = getLocationValue(itemLocationSelect, itemLocationCustom);
-    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
-      formMsg.textContent = "請確認欄位都已正確填寫";
+    if(!name || categories.length === 0 || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
+      formMsg.textContent = "請確認欄位都已正確填寫（至少選擇一個類別）";
       return;
     }
     if(itemLocationSelect.value === "自行輸入" && !location){
@@ -1221,7 +1450,7 @@
     const cp = price / (grams * count);
 
     if(editingRow !== null){
-      submitUpdate(editingRow, { name, category, grams, price, count, unitPrice, date, location });
+      submitUpdate(editingRow, { name, category, categories, grams, price, count, unitPrice, date, location });
       return;
     }
 
@@ -1231,7 +1460,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category, grams, price, count, unitPrice, cp, date, location,
+      name, categories, grams, price, count, unitPrice, cp, date, location,
       pending: true,
       uploadError: false
     });
@@ -1244,6 +1473,7 @@
     $("itemCount").value = "1";
     itemDateInput.value = date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
+    resetCategorySelection();
     formMsg.textContent = "";
     $("itemGrams").focus();
 
@@ -1262,7 +1492,9 @@
     $("itemPrice").value = item.price;
     $("itemCount").value = item.count || 1;
     $("itemName").value = item.name;
-    $("itemCategory").value = item.category;
+    selectedCategories = (item.categories || []).slice();
+    renderSelectedCategoryChips();
+    categoryManualRow.style.display = "none";
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
@@ -1280,6 +1512,7 @@
     $("itemCount").value = "1";
     itemDateInput.value = new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
+    resetCategorySelection();
     updateCalc();
     formTitle.textContent = "新增品項";
     addBtn.textContent = "加入紀錄";
@@ -1292,7 +1525,7 @@
     const target = items.find(i => i.row === row);
     if(target){
       target.name = fields.name;
-      target.category = fields.category;
+      target.categories = fields.categories;
       target.grams = fields.grams;
       target.price = fields.price;
       target.count = fields.count;
@@ -1343,8 +1576,8 @@
 
   // ---------- 類別篩選 ----------
   function renderCategoryChips(){
-    const cats = Array.from(new Set(items.map(i => i.category))).sort();
-    categoryList.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join("");
+    const cats = getAllKnownCategories();
+    renderCategoryDropdownOptions();
     categoryChips.innerHTML = "";
     const allChip = document.createElement("button");
     allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
@@ -1375,6 +1608,20 @@
   });
 
   // ---------- 表格渲染 ----------
+
+  // 依「類別」建立分組：同一品項若有多個類別，會同時計入每個類別的排名
+  function buildCategoryMap(){
+    const map = new Map();
+    items.forEach(i => {
+      if(i.pending) return;
+      (i.categories || []).forEach(c => {
+        if(!map.has(c)) map.set(c, []);
+        map.get(c).push(i);
+      });
+    });
+    return map;
+  }
+
   function tierFor(item, sameCategory){
     if(sameCategory.length < 2) return "gray";
     const sorted = sameCategory.slice().sort((a,b) => a.cp - b.cp);
@@ -1385,9 +1632,40 @@
     return "red";
   }
 
+  // 該品項在其主要類別中的 CP 值排名百分比（數字越小代表越划算，"前 X%"）
+  function percentileFor(item, categoryMap){
+    const cat = (item.categories || [])[0];
+    if(!cat) return null;
+    const group = categoryMap.get(cat);
+    if(!group || group.length < 2) return null;
+    const sorted = group.slice().sort((a,b) => a.cp - b.cp);
+    const idx = sorted.indexOf(item);
+    if(idx === -1) return null;
+    const pct = Math.max(1, Math.round(((idx + 1) / sorted.length) * 100));
+    return { pct, cat };
+  }
+
+  function updateCategoryStatsBar(){
+    if(activeCategory === "__all__"){
+      categoryStatsBar.classList.remove("show");
+      return;
+    }
+    const group = items.filter(i => !i.pending && (i.categories || []).includes(activeCategory));
+    if(group.length === 0){
+      categoryStatsBar.classList.remove("show");
+      return;
+    }
+    const avg = group.reduce((sum, i) => sum + i.cp, 0) / group.length;
+    const best = group.slice().sort((a,b) => a.cp - b.cp)[0];
+    categoryStatsBar.innerHTML = `類別「<strong>${escapeHtml(activeCategory)}</strong>」平均 CP 值：<strong>${avg.toFixed(3)}</strong> $/g（共 ${group.length} 筆・最划算 ${best.cp.toFixed(3)}）`;
+    categoryStatsBar.classList.add("show");
+  }
+
   function renderTable(){
+    updateCategoryStatsBar();
+
     let list = items.filter(i => {
-      const matchCat = activeCategory === "__all__" || i.category === activeCategory;
+      const matchCat = activeCategory === "__all__" || (i.categories || []).includes(activeCategory);
       const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
       return matchCat && matchSearch;
     });
@@ -1397,7 +1675,9 @@
       return;
     }
 
-    // ---- 依品項名稱分組：同個產品即使 ml/g 數不同，也整合在一起方便比較 ----
+    const categoryMap = buildCategoryMap();
+
+    // ---- 依品項名稱分組：同個產品即使 ml/g 數或數量不同，也整合在一起方便比較 ----
     const groupOrder = [];
     const groupsMap = new Map();
     list.forEach(item => {
@@ -1411,69 +1691,98 @@
 
     const groups = groupOrder.map(key => {
       const arr = groupsMap.get(key).slice().sort((a,b) => a.cp - b.cp); // 組內固定依 CP 值由低到高，方便比價
-      return { items: arr, bestCp: arr[0].cp };
+
+      // 代表項目：優先挑「1入」中最划算的；若組內沒有 1 入，則退回整體最划算的那個
+      const singles = arr.filter(i => (i.count || 1) === 1);
+      const rep = singles.length ? singles.slice().sort((a,b) => a.cp - b.cp)[0] : arr[0];
+      const others = arr.filter(i => i !== rep);
+
+      return { key, items: arr, rep, others, bestCp: arr[0].cp };
     });
 
     // 組與組之間依目前排序方向（依各組最划算的 CP 值）排序
     groups.sort((a,b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
 
+    function renderRow(item, opts){
+      const { isRep, multi, isBestOfGroup, sub } = opts;
+      let tier;
+      if(item.pending){
+        tier = "gray";
+      } else if(multi){
+        const arr = groupsMap.get(item.name.trim().toLowerCase());
+        const idx = arr.indexOf(item);
+        if(idx === 0) tier = "green";
+        else if(idx === arr.length - 1) tier = "red";
+        else tier = "amber";
+      } else {
+        const cat = (item.categories || [])[0];
+        const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
+        tier = tierFor(item, sameCategory);
+      }
+
+      const pctInfo = !item.pending ? percentileFor(item, categoryMap) : null;
+      const rankBadge = pctInfo ? `<span class="rank-badge" title="在「${escapeHtml(pctInfo.cat)}」類別中的 CP 值排名">前 ${pctInfo.pct}% 划算</span>` : "";
+      const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
+      const singleBadge = (isRep && multi && (item.count || 1) === 1) ? `<span class="best-badge">・1入</span>` : "";
+      const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
+      const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
+      const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
+      const catBadges = (item.categories || []).map(c => `<span class="cat-badge">${escapeHtml(c)}</span>`).join("");
+      const actions = item.pending
+        ? (item.uploadError
+            ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
+            : `<span class="pending-label" title="背景上傳中">⏳</span>`)
+        : `<div class="row-actions">
+             <button class="edit" data-row="${item.row}" title="編輯">✎</button>
+             <button class="del" data-row="${item.row}" title="刪除">✕</button>
+           </div>`;
+      return `
+        <div class="${rowClass}">
+          <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
+            ${escapeHtml(item.name)} ${bestBadge}${singleBadge}${rankBadge}
+            <span class="cat-badge-group">${catBadges}</span>
+            ${dateBadge}
+            ${locationBadge}
+          </div>
+          <div class="stats">
+            <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
+            <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
+            <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
+            <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
+          </div>
+          <div class="cp-cell">
+            <span class="stat-label mono">$/g</span>
+            <span class="dot ${tier}"></span>
+            <span class="cp-val mono">${item.cp.toFixed(3)}</span>
+          </div>
+          ${actions}
+        </div>
+      `;
+    }
+
     tableBody.innerHTML = groups.map(group => {
-      const arr = group.items;
+      const { key, items: arr, rep, others } = group;
       const multi = arr.length > 1;
       const groupHeader = multi
-        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／通路，已依 CP 值排序</div>`
+        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／數量／通路，預設顯示 1 入且最划算的紀錄</div>`
         : "";
 
-      const rows = arr.map((item, idx) => {
-        let tier;
-        if(item.pending){
-          tier = "gray";
-        } else if(multi){
-          // 組內比較：組內最便宜為綠、最貴為紅、其餘為黃
-          if(idx === 0) tier = "green";
-          else if(idx === arr.length - 1) tier = "red";
-          else tier = "amber";
-        } else {
-          const sameCategory = items.filter(i => i.category === item.category && !i.pending);
-          tier = tierFor(item, sameCategory);
-        }
-        const bestBadge = (multi && idx === 0 && !item.pending) ? `<span class="best-badge">🏆 組內最划算</span>` : "";
-        const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "");
-        const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
-        const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
-        const actions = item.pending
-          ? (item.uploadError
-              ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
-              : `<span class="pending-label" title="背景上傳中">⏳</span>`)
-          : `<div class="row-actions">
-               <button class="edit" data-row="${item.row}" title="編輯">✎</button>
-               <button class="del" data-row="${item.row}" title="刪除">✕</button>
-             </div>`;
-        return `
-          <div class="${rowClass}">
-            <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-              ${escapeHtml(item.name)} ${bestBadge}
-              <span class="cat-badge">${escapeHtml(item.category)}</span>
-              ${dateBadge}
-              ${locationBadge}
-            </div>
-            <div class="stats">
-              <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
-              <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
-              <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
-              <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
-            </div>
-            <div class="cp-cell">
-              <span class="stat-label mono">$/g</span>
-              <span class="dot ${tier}"></span>
-              <span class="cp-val mono">${item.cp.toFixed(3)}</span>
-            </div>
-            ${actions}
-          </div>
-        `;
-      }).join("");
+      const repRow = renderRow(rep, { isRep: true, multi, isBestOfGroup: true, sub: false });
 
-      return `<div class="group-block">${groupHeader}${rows}</div>`;
+      let othersHtml = "";
+      if(others.length){
+        const expanded = expandedGroups.has(key);
+        const toggleLabel = expanded
+          ? `▴ 收合其他 ${others.length} 種容量／數量`
+          : `▾ 查看其他 ${others.length} 種容量／數量／通路`;
+        const subRows = others.map(item => renderRow(item, { isRep: false, multi, isBestOfGroup: false, sub: true })).join("");
+        othersHtml = `
+          <button type="button" class="sub-toggle" data-group="${escapeHtml(key)}">${toggleLabel}</button>
+          <div class="sub-items" style="display:${expanded ? "block" : "none"};">${subRows}</div>
+        `;
+      }
+
+      return `<div class="group-block">${groupHeader}${repRow}${othersHtml}</div>`;
     }).join("");
 
     tableBody.querySelectorAll(".del").forEach(btn => {
@@ -1489,6 +1798,14 @@
       el.addEventListener("click", () => {
         const item = items.find(i => String(i.row) === el.dataset.row);
         if(item) openCompareModal(item);
+      });
+    });
+    tableBody.querySelectorAll(".sub-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.group;
+        if(expandedGroups.has(key)) expandedGroups.delete(key);
+        else expandedGroups.add(key);
+        renderTable();
       });
     });
   }
@@ -1510,7 +1827,7 @@
   const cached = localStorage.getItem(LS_CACHE_KEY);
   if(cached){
     try{
-      items = JSON.parse(cached);
+      items = JSON.parse(cached).map(migrateItem);
       renderLocationOptions();
       renderCategoryChips();
       renderTable();
