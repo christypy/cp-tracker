@@ -928,7 +928,7 @@
 
     <div id="modalSaveSection" style="display:none; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line);">
       <div class="field" style="margin-bottom:10px;">
-        <label for="modalLocation">🎉 更划算！在哪裡找到這個價格？</label>
+        <label for="modalLocation" id="modalSaveLabel">🎉 更划算！在哪裡找到這個價格？</label>
         <select id="modalLocation">
           <option value="">-- 選擇購買地點 --</option>
         </select>
@@ -1197,6 +1197,7 @@
   const modalVerdict = $("modalVerdict");
   const closeModalBtn = $("closeModalBtn");
   const modalSaveSection = $("modalSaveSection");
+  const modalSaveLabel = $("modalSaveLabel");
   const modalSaveBtn = $("modalSaveBtn");
   const modalSaveMsg = $("modalSaveMsg");
 
@@ -1270,6 +1271,7 @@
           modalVerdict.textContent = "🎉 更划算！(省 $" + Math.abs(diff).toFixed(1) + ")";
           modalVerdict.style.color = "var(--green)";
           modalVerdict.style.borderColor = "var(--green)";
+          modalSaveLabel.textContent = "🎉 更划算！在哪裡找到這個價格？";
           modalSaveSection.style.display = "block";
         } else if(diff > EPSILON){
           modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff.toFixed(1) + ")";
@@ -1279,6 +1281,9 @@
           modalVerdict.textContent = "⚖ 劃算度相同";
           modalVerdict.style.color = "var(--ink-soft)";
           modalVerdict.style.borderColor = "var(--ink-soft)";
+          // 划算度相同，也是多一個可以比價的通路／容量選擇，一樣可以存成新的一筆紀錄
+          modalSaveLabel.textContent = "⚖ 划算度相同，也想記錄這個通路／容量嗎？";
+          modalSaveSection.style.display = "block";
         }
       } else {
         modalTargetHint.style.display = "block";
