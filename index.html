@@ -822,6 +822,7 @@
           <input type="text" id="categoryManualInput" placeholder="例如 喝的/氣泡，或直接輸入單一類別">
           <button type="button" id="categoryManualAddBtn">新增</button>
         </div>
+        <div id="categoryManualHint" style="display:none; font-size:11px; color:var(--ink-soft); margin-top:4px;"></div>
         <div class="cat-chips-selected" id="categoryChipsSelected"></div>
       </div>
       <div class="field full">
@@ -1051,7 +1052,19 @@
   const categoryManualInput = $("categoryManualInput");
   const categoryManualAddBtn = $("categoryManualAddBtn");
   const categoryChipsSelectedEl = $("categoryChipsSelected");
+  const categoryManualHint = $("categoryManualHint");
   let selectedCategories = [];
+
+  function updateCategoryManualHint(){
+    const parent = categoryParentSelect.value;
+    if(parent){
+      categoryManualHint.style.display = "block";
+      categoryManualHint.textContent = `目前主類別為「${parent}」：直接輸入「甜的」會自動存成「${parent} ▸ 甜的」；若要新增獨立主類別，請輸入完整路徑或先把上方主類別清空`;
+    } else {
+      categoryManualHint.style.display = "none";
+      categoryManualHint.textContent = "";
+    }
+  }
 
   function getAllKnownCategories(){
     const set = new Set();
@@ -1081,7 +1094,10 @@
     categoryChildSelect.value = "";
   }
 
-  categoryParentSelect.addEventListener("change", renderCategoryChildOptions);
+  categoryParentSelect.addEventListener("change", () => {
+    renderCategoryChildOptions();
+    updateCategoryManualHint();
+  });
 
   categoryAddBtn.addEventListener("click", () => {
     const parent = categoryParentSelect.value;
@@ -1122,16 +1138,30 @@
     renderCategoryChildOptions();
     categoryManualInput.value = "";
     categoryManualRow.style.display = "none";
+    updateCategoryManualHint();
   }
 
   categoryManualBtn.addEventListener("click", () => {
     const showing = categoryManualRow.style.display !== "none";
     categoryManualRow.style.display = showing ? "none" : "flex";
-    if(!showing) categoryManualInput.focus();
+    if(!showing){
+      categoryManualInput.focus();
+      updateCategoryManualHint();
+    } else {
+      categoryManualHint.style.display = "none";
+    }
   });
 
   function commitManualCategory(){
-    addSelectedCategory(categoryManualInput.value);
+    let val = categoryManualInput.value.trim();
+    if(!val) return;
+    // 若目前已選擇主類別、且輸入內容沒有自己包含「/」，自動掛在該主類別底下，
+    // 避免打字新增出跟現有子類別同名、卻沒有掛在正確主類別下的「幽靈分類」
+    const parent = categoryParentSelect.value;
+    if(parent && val.indexOf(CATEGORY_SEP) === -1){
+      val = joinCategoryPath(parent, val);
+    }
+    addSelectedCategory(val);
     categoryManualInput.value = "";
     categoryManualInput.focus();
   }
@@ -1688,6 +1718,7 @@
       renderCategoryChildOptions();
     }
     categoryManualRow.style.display = "none";
+    updateCategoryManualHint();
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
