@@ -1662,7 +1662,8 @@
   // 編輯後不再整張表重新讀取一次（那是造成「修改後同步很久」的主因：
   // 原本會先送出更新，再多打一次讀取整張試算表的請求，兩次 Apps Script 呼叫疊在一起才慢）。
   // 現在畫面已經用本地資料樂觀更新過了，背景只需要送出這一筆更新即可，不用再等一次全表讀取。
-  function submitUpdate(row, fields){
+  function submitUpdate(rowRaw, fields){
+    const row = Number(rowRaw);
     const target = items.find(i => i.row === row);
     if(target){
       target.name = fields.name;
@@ -1710,15 +1711,18 @@
   // ---------- 刪除品項 ----------
   // 同樣道理：刪除後直接在本地移除該筆，並把後面列號的紀錄往前挪一格（試算表刪除列會讓後面的列號往上移），
   // 不再多打一次全表讀取，刪除的回應速度會快很多。
-  async function deleteItem(row){
-    if(String(row).startsWith("pending-")){
-      items = items.filter(i => i.row !== row);
+  async function deleteItem(rowRaw){
+    if(String(rowRaw).startsWith("pending-")){
+      items = items.filter(i => i.row !== rowRaw);
       renderTable();
       return;
     }
     if(!scriptUrl) return;
     if(!confirm("確定要刪除這筆紀錄嗎？")) return;
 
+    // 按鈕上的 data-row 屬性一律是字串，本地資料的 row 是數字，這裡統一轉成數字再比對，
+    // 不然本地陣列永遠找不到要刪除的那一筆，畫面就得等重新整理才會消失
+    const row = Number(rowRaw);
     const idx = items.findIndex(i => i.row === row);
     const backup = idx !== -1 ? items[idx] : null;
     if(idx !== -1) items.splice(idx, 1);
