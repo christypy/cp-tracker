@@ -449,6 +449,7 @@
     padding:1px 7px;
     border-radius:999px;
     margin-left:2px;
+    margin-top:2px;
     white-space:nowrap;
     display:inline-block;
   }
@@ -1632,17 +1633,18 @@
     return "red";
   }
 
-  // 該品項在其主要類別中的 CP 值排名百分比（數字越小代表越划算，"前 X%"）
-  function percentileFor(item, categoryMap){
-    const cat = (item.categories || [])[0];
-    if(!cat) return null;
-    const group = categoryMap.get(cat);
-    if(!group || group.length < 2) return null;
-    const sorted = group.slice().sort((a,b) => a.cp - b.cp);
-    const idx = sorted.indexOf(item);
-    if(idx === -1) return null;
-    const pct = Math.max(1, Math.round(((idx + 1) / sorted.length) * 100));
-    return { pct, cat };
+  // 該品項在「每一個」所屬類別中的 CP 值名次（同類別內由低到高排序，數字越小越划算）
+  function rankInfoFor(item, categoryMap){
+    const results = [];
+    (item.categories || []).forEach(cat => {
+      const group = categoryMap.get(cat);
+      if(!group || group.length < 2) return;
+      const sorted = group.slice().sort((a,b) => a.cp - b.cp);
+      const idx = sorted.indexOf(item);
+      if(idx === -1) return;
+      results.push({ cat, rank: idx + 1, total: sorted.length });
+    });
+    return results;
   }
 
   function updateCategoryStatsBar(){
@@ -1720,8 +1722,10 @@
         tier = tierFor(item, sameCategory);
       }
 
-      const pctInfo = !item.pending ? percentileFor(item, categoryMap) : null;
-      const rankBadge = pctInfo ? `<span class="rank-badge" title="在「${escapeHtml(pctInfo.cat)}」類別中的 CP 值排名">前 ${pctInfo.pct}% 划算</span>` : "";
+      const rankInfos = !item.pending ? rankInfoFor(item, categoryMap) : [];
+      const rankBadge = rankInfos.map(r =>
+        `<span class="rank-badge" title="在「${escapeHtml(r.cat)}」類別中依 CP 值由低到高排名，數字越小越划算">${escapeHtml(r.cat)} 第${r.rank}名／${r.total}</span>`
+      ).join("");
       const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
       const singleBadge = (isRep && multi && (item.count || 1) === 1) ? `<span class="best-badge">・1入</span>` : "";
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
