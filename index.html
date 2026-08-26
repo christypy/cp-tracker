@@ -805,25 +805,14 @@
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
       </div>
       <div class="field full">
-        <label>類別（可複選，支援主類別／子類別）</label>
-        <div class="cat-input-row">
-          <select id="categoryParentSelect">
-            <option value="">-- 主類別 --</option>
-          </select>
-          <select id="categoryChildSelect" disabled>
-            <option value="">（不指定子類別）</option>
-          </select>
-        </div>
-        <div class="cat-input-row" style="margin-top:8px;">
-          <button type="button" id="categoryAddBtn" class="cat-manual-btn" style="flex:1;">＋ 加入這個類別</button>
-          <button type="button" id="categoryManualBtn" class="cat-manual-btn">✎ 手動輸入</button>
-        </div>
-        <div class="cat-manual-row" id="categoryManualRow" style="display:none;">
-          <input type="text" id="categoryManualInput" placeholder="例如 喝的/氣泡，或直接輸入單一類別">
-          <button type="button" id="categoryManualAddBtn">新增</button>
-        </div>
-        <div id="categoryManualHint" style="display:none; font-size:11px; color:var(--ink-soft); margin-top:4px;"></div>
-        <div class="cat-chips-selected" id="categoryChipsSelected"></div>
+        <label for="categoryParentInput">主類別 <span style="color:var(--red);">*必填</span></label>
+        <input type="text" id="categoryParentInput" list="categoryParentList" placeholder="例如 零食（可直接輸入新類別）" autocomplete="off" required>
+        <datalist id="categoryParentList"></datalist>
+      </div>
+      <div class="field full">
+        <label for="categoryChildInput">子類別（選填）</label>
+        <input type="text" id="categoryChildInput" list="categoryChildList" placeholder="例如 甜的（選填，可留空或直接輸入新子類別）" autocomplete="off">
+        <datalist id="categoryChildList"></datalist>
       </div>
       <div class="field full">
         <label for="itemDate">日期</label>
@@ -1006,169 +995,81 @@
   }
   setSyncState(null, "尚未同步");
 
-  // ---------- 類別（主類別／子類別，可複選）管理 ----------
+  // ---------- 類別（主類別 必填／子類別 選填）管理 ----------
+  // 邏輯很單純：每筆紀錄一定要有一個主類別，子類別可有可無。
+  // 例如：果凍 → 主類別「零食」、子類別「甜的」；子類別留空就只算在主類別底下。
   const CATEGORY_SEP = "/";
 
-  // 預設的類別樹：主類別 -> 子類別清單。子類別彼此不互斥（例如零食可以同時是「甜的」又是「健康的」）
+  // 預設的類別樹：主類別 -> 子類別清單，僅作為輸入時的建議選項
   const DEFAULT_CATEGORY_TREE = {
     "喝的": ["乳製品", "茶", "氣泡"],
     "零食": ["甜的", "鹹的", "健康的"]
   };
 
   function splitCategoryPath(path){
-    const idx = path.indexOf(CATEGORY_SEP);
-    if(idx === -1) return { parent: path, child: "" };
-    return { parent: path.slice(0, idx), child: path.slice(idx + 1) };
+    const s = String(path || "");
+    const idx = s.indexOf(CATEGORY_SEP);
+    if(idx === -1) return { parent: s, child: "" };
+    return { parent: s.slice(0, idx), child: s.slice(idx + 1) };
   }
 
   function joinCategoryPath(parent, child){
     return child ? (parent + CATEGORY_SEP + child) : parent;
   }
 
+  // 品項實際所屬的完整類別路徑（主類別，或「主類別/子類別」）
+  function itemCategoryPath(item){
+    if(!item || !item.category) return "";
+    return item.subCategory ? joinCategoryPath(item.category, item.subCategory) : item.category;
+  }
+
   // 依目前所有紀錄動態彙整出「主類別 -> 子類別清單」，並與預設類別樹合併
   function buildCategoryTree(){
     const tree = new Map();
     Object.keys(DEFAULT_CATEGORY_TREE).forEach(p => tree.set(p, new Set(DEFAULT_CATEGORY_TREE[p])));
-    items.forEach(i => (i.categories || []).forEach(c => {
-      const { parent, child } = splitCategoryPath(c);
-      if(!parent) return;
-      if(!tree.has(parent)) tree.set(parent, new Set());
-      if(child) tree.get(parent).add(child);
-    }));
+    items.forEach(i => {
+      if(!i.category) return;
+      if(!tree.has(i.category)) tree.set(i.category, new Set());
+      if(i.subCategory) tree.get(i.category).add(i.subCategory);
+    });
     return tree;
   }
 
   // filterValue 為 "__all__"、單一主類別（例如「零食」）、或完整路徑（例如「零食/甜的」）
-  function categoryMatches(categories, filterValue){
+  function categoryMatches(item, filterValue){
     if(filterValue === "__all__") return true;
-    return (categories || []).some(c => c === filterValue || c.indexOf(filterValue + CATEGORY_SEP) === 0);
+    const path = itemCategoryPath(item);
+    if(!path) return false;
+    return path === filterValue || path.indexOf(filterValue + CATEGORY_SEP) === 0;
   }
 
-  const categoryParentSelect = $("categoryParentSelect");
-  const categoryChildSelect = $("categoryChildSelect");
-  const categoryAddBtn = $("categoryAddBtn");
-  const categoryManualBtn = $("categoryManualBtn");
-  const categoryManualRow = $("categoryManualRow");
-  const categoryManualInput = $("categoryManualInput");
-  const categoryManualAddBtn = $("categoryManualAddBtn");
-  const categoryChipsSelectedEl = $("categoryChipsSelected");
-  const categoryManualHint = $("categoryManualHint");
-  let selectedCategories = [];
+  const categoryParentInput = $("categoryParentInput");
+  const categoryChildInput = $("categoryChildInput");
+  const categoryParentList = $("categoryParentList");
+  const categoryChildList = $("categoryChildList");
 
-  function updateCategoryManualHint(){
-    const parent = categoryParentSelect.value;
-    if(parent){
-      categoryManualHint.style.display = "block";
-      categoryManualHint.textContent = `目前主類別為「${parent}」：直接輸入「甜的」會自動存成「${parent} ▸ 甜的」；若要新增獨立主類別，請輸入完整路徑或先把上方主類別清空`;
-    } else {
-      categoryManualHint.style.display = "none";
-      categoryManualHint.textContent = "";
-    }
-  }
-
-  function getAllKnownCategories(){
-    const set = new Set();
-    items.forEach(i => (i.categories || []).forEach(c => { if(c) set.add(c); }));
-    return Array.from(set).sort();
-  }
-
-  function renderCategoryParentOptions(){
+  // 依目前資料重新整理「主類別」「子類別」的建議清單（datalist）
+  function renderCategoryDatalists(){
     const tree = buildCategoryTree();
-    const current = categoryParentSelect.value;
     const parents = Array.from(tree.keys()).sort();
-    categoryParentSelect.innerHTML = '<option value="">-- 主類別 --</option>' +
-      parents.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
-    if(parents.includes(current)){
-      categoryParentSelect.value = current;
-    }
-    renderCategoryChildOptions();
+    categoryParentList.innerHTML = parents.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
+    updateChildDatalist();
   }
 
-  function renderCategoryChildOptions(){
+  function updateChildDatalist(){
     const tree = buildCategoryTree();
-    const parent = categoryParentSelect.value;
+    const parent = categoryParentInput.value.trim();
     const children = parent && tree.has(parent) ? Array.from(tree.get(parent)).sort() : [];
-    categoryChildSelect.innerHTML = '<option value="">（不指定子類別）</option>' +
-      children.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-    categoryChildSelect.disabled = !parent;
-    categoryChildSelect.value = "";
+    categoryChildList.innerHTML = children.map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
   }
 
-  categoryParentSelect.addEventListener("change", () => {
-    renderCategoryChildOptions();
-    updateCategoryManualHint();
-  });
-
-  categoryAddBtn.addEventListener("click", () => {
-    const parent = categoryParentSelect.value;
-    if(!parent){
-      categoryParentSelect.focus();
-      return;
-    }
-    const child = categoryChildSelect.value;
-    addSelectedCategory(joinCategoryPath(parent, child));
-    categoryChildSelect.value = "";
-  });
-
-  function renderSelectedCategoryChips(){
-    categoryChipsSelectedEl.innerHTML = selectedCategories.map(c => {
-      const { parent, child } = splitCategoryPath(c);
-      const label = child ? `${escapeHtml(parent)} <span class="mono" style="opacity:.75;">▸ ${escapeHtml(child)}</span>` : escapeHtml(parent);
-      return `<span class="cat-chip">${label}<button type="button" class="cat-chip-x" data-cat="${escapeHtml(c)}">✕</button></span>`;
-    }).join("");
-    categoryChipsSelectedEl.querySelectorAll(".cat-chip-x").forEach(btn => {
-      btn.addEventListener("click", () => {
-        selectedCategories = selectedCategories.filter(c => c !== btn.dataset.cat);
-        renderSelectedCategoryChips();
-      });
-    });
-  }
-
-  function addSelectedCategory(cat){
-    cat = String(cat || "").trim();
-    if(!cat) return;
-    if(!selectedCategories.includes(cat)) selectedCategories.push(cat);
-    renderSelectedCategoryChips();
-  }
+  categoryParentInput.addEventListener("input", updateChildDatalist);
 
   function resetCategorySelection(){
-    selectedCategories = [];
-    renderSelectedCategoryChips();
-    categoryParentSelect.value = "";
-    renderCategoryChildOptions();
-    categoryManualInput.value = "";
-    categoryManualRow.style.display = "none";
-    updateCategoryManualHint();
+    categoryParentInput.value = "";
+    categoryChildInput.value = "";
+    updateChildDatalist();
   }
-
-  categoryManualBtn.addEventListener("click", () => {
-    const showing = categoryManualRow.style.display !== "none";
-    categoryManualRow.style.display = showing ? "none" : "flex";
-    if(!showing){
-      categoryManualInput.focus();
-      updateCategoryManualHint();
-    } else {
-      categoryManualHint.style.display = "none";
-    }
-  });
-
-  function commitManualCategory(){
-    let val = categoryManualInput.value.trim();
-    if(!val) return;
-    // 若目前已選擇主類別、且輸入內容沒有自己包含「/」，自動掛在該主類別底下，
-    // 避免打字新增出跟現有子類別同名、卻沒有掛在正確主類別下的「幽靈分類」
-    const parent = categoryParentSelect.value;
-    if(parent && val.indexOf(CATEGORY_SEP) === -1){
-      val = joinCategoryPath(parent, val);
-    }
-    addSelectedCategory(val);
-    categoryManualInput.value = "";
-    categoryManualInput.focus();
-  }
-  categoryManualAddBtn.addEventListener("click", commitManualCategory);
-  categoryManualInput.addEventListener("keydown", (e) => {
-    if(e.key === "Enter"){ e.preventDefault(); commitManualCategory(); }
-  });
 
   // ---------- 新增表單內的即時試算 ----------
   const itemGramsInput = $("itemGrams");
@@ -1434,8 +1335,8 @@
     const cp = newPrice / (newGrams * newCount);
     const date = new Date().toISOString().slice(0, 10);
     const name = activeCompareItem.name;
-    const categories = (activeCompareItem.categories || []).slice();
-    const category = categories.join(",");
+    const category = activeCompareItem.category;
+    const subCategory = activeCompareItem.subCategory || "";
 
     tempIdCounter += 1;
     const tempId = "pending-" + tempIdCounter;
@@ -1443,7 +1344,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, categories,
+      name, category, subCategory,
       grams: newGrams,
       price: newPrice,
       count: newCount,
@@ -1456,7 +1357,7 @@
     renderCategoryChips();
     renderTable();
 
-    uploadQueue.push({ tempId, name, category, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
+    uploadQueue.push({ tempId, name, category, subCategory, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
     processQueue();
 
     modalSaveMsg.textContent = "✓ 已加入紀錄，背景同步中…";
@@ -1544,19 +1445,21 @@
     }
   }
 
-  // 相容舊版快取資料（舊版只有單一 category 字串，沒有 categories 陣列）
+  // 相容舊版快取資料（舊版是可複選的 categories 陣列，例如 ["零食/甜的"]）
+  // 新版一筆紀錄只有一個主類別 + 一個選填子類別，取舊資料的第一個當作主／子類別
   function migrateItem(item){
-    if(!item.categories || !item.categories.length){
-      item.categories = item.category ? parseCategories(item.category) : ["未分類"];
+    if(item.category === undefined || item.category === null){
+      if(item.categories && item.categories.length){
+        const { parent, child } = splitCategoryPath(item.categories[0]);
+        item.category = parent || "未分類";
+        item.subCategory = item.subCategory || child || "";
+      } else {
+        item.category = "未分類";
+      }
     }
+    if(item.subCategory === undefined || item.subCategory === null) item.subCategory = "";
+    delete item.categories;
     return item;
-  }
-
-  function parseCategories(str){
-    return String(str || "")
-      .split(/[,、;]+/)
-      .map(s => s.trim())
-      .filter(Boolean);
   }
 
   function normalizeItem(raw){
@@ -1565,11 +1468,13 @@
     const count = Number(raw["數量"]) || 1;
     const unitPrice = raw["單罐價格"] !== undefined && raw["單罐價格"] !== "" ? Number(raw["單罐價格"]) : (count > 0 ? price / count : price);
     const cp = (grams * count) > 0 ? price / (grams * count) : 0;
-    const categories = parseCategories(raw["類別"]);
+    const category = String(raw["類別"] || "").trim();
+    const subCategory = String(raw["子類別"] || "").trim();
     return {
       row: raw["_row"],
       name: raw["品項名稱"] || "",
-      categories: categories.length ? categories : ["未分類"],
+      category: category || "未分類",
+      subCategory: subCategory,
       grams: grams,
       price: price,
       count: count,
@@ -1596,20 +1501,26 @@
     }
   }
 
+  // 新增品項送出後，Apps Script 會直接回傳這筆資料實際寫入的列號（row），
+  // 前端就能直接把暫存項目（pending-N）換成真正的列號，不必再整張表重新讀取一次，
+  // 大幅減少每次新增要等待的 Apps Script 呼叫次數。
   async function processQueue(){
     if(isProcessingQueue) return;
     isProcessingQueue = true;
+    let anySucceeded = false;
     while(uploadQueue.length > 0){
       const job = uploadQueue[0];
       updateQueueStatus();
+      const stillPending = items.find(i => i.tempId === job.tempId);
       try{
-        await fetch(scriptUrl, {
+        const res = await fetch(scriptUrl, {
           method: "POST",
           headers: {"Content-Type": "text/plain;charset=utf-8"},
           body: JSON.stringify({
             action: "add",
             name: job.name,
             category: job.category,
+            subCategory: job.subCategory,
             grams: job.grams,
             price: job.price,
             count: job.count,
@@ -1618,10 +1529,17 @@
             location: job.location
           })
         });
+        const data = JSON.parse(await res.text());
+        if(data.status !== "ok") throw new Error(data.message || "新增失敗");
         job.failed = false;
+        anySucceeded = true;
+        if(stillPending && data.row){
+          stillPending.row = data.row;
+          stillPending.pending = false;
+          delete stillPending.tempId;
+        }
       }catch(err){
         job.failed = true;
-        const stillPending = items.find(i => i.tempId === job.tempId);
         if(stillPending){
           stillPending.uploadError = true;
         }
@@ -1630,7 +1548,10 @@
       uploadQueue.shift();
     }
     isProcessingQueue = false;
-    await loadItems();
+    renderTable();
+    if(anySucceeded){
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+    }
   }
 
   $("addForm").addEventListener("submit", (e) => {
@@ -1640,15 +1561,16 @@
       return;
     }
     const name = $("itemName").value.trim();
-    const categories = selectedCategories.slice();
-    const category = categories.join(",");
+    const category = categoryParentInput.value.trim();
+    const subCategory = categoryChildInput.value.trim();
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
     const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
     const location = getLocationValue(itemLocationSelect, itemLocationCustom);
-    if(!name || categories.length === 0 || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
-      formMsg.textContent = "請確認欄位都已正確填寫（至少選擇一個類別）";
+    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
+      formMsg.textContent = "請確認欄位都已正確填寫（主類別為必填，子類別可留空）";
+      categoryParentInput.reportValidity && categoryParentInput.reportValidity();
       return;
     }
     if(itemLocationSelect.value === "自行輸入" && !location){
@@ -1663,7 +1585,7 @@
     const cp = price / (grams * count);
 
     if(editingRow !== null){
-      submitUpdate(editingRow, { name, category, categories, grams, price, count, unitPrice, date, location });
+      submitUpdate(editingRow, { name, category, subCategory, grams, price, count, unitPrice, date, location });
       return;
     }
 
@@ -1673,7 +1595,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, categories, grams, price, count, unitPrice, cp, date, location,
+      name, category, subCategory, grams, price, count, unitPrice, cp, date, location,
       pending: true,
       uploadError: false
     });
@@ -1690,7 +1612,7 @@
     formMsg.textContent = "";
     $("itemGrams").focus();
 
-    uploadQueue.push({ tempId, name, category, grams, price, count, unitPrice, date, location });
+    uploadQueue.push({ tempId, name, category, subCategory, grams, price, count, unitPrice, date, location });
     processQueue();
   });
 
@@ -1705,20 +1627,12 @@
     $("itemPrice").value = item.price;
     $("itemCount").value = item.count || 1;
     $("itemName").value = item.name;
-    selectedCategories = (item.categories || []).slice();
-    renderSelectedCategoryChips();
-    renderCategoryParentOptions();
-    if(selectedCategories.length){
-      const { parent, child } = splitCategoryPath(selectedCategories[0]);
-      categoryParentSelect.value = parent;
-      renderCategoryChildOptions();
-      categoryChildSelect.value = child;
-    } else {
-      categoryParentSelect.value = "";
-      renderCategoryChildOptions();
-    }
-    categoryManualRow.style.display = "none";
-    updateCategoryManualHint();
+    // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」，
+    // 這樣編輯時可以直接看到、也可以直接修改子類別，儲存時會一併更新回試算表
+    renderCategoryDatalists();
+    categoryParentInput.value = item.category || "";
+    updateChildDatalist();
+    categoryChildInput.value = item.subCategory || "";
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
@@ -1745,11 +1659,15 @@
 
   cancelEditBtn.addEventListener("click", endEdit);
 
+  // 編輯後不再整張表重新讀取一次（那是造成「修改後同步很久」的主因：
+  // 原本會先送出更新，再多打一次讀取整張試算表的請求，兩次 Apps Script 呼叫疊在一起才慢）。
+  // 現在畫面已經用本地資料樂觀更新過了，背景只需要送出這一筆更新即可，不用再等一次全表讀取。
   function submitUpdate(row, fields){
     const target = items.find(i => i.row === row);
     if(target){
       target.name = fields.name;
-      target.categories = fields.categories;
+      target.category = fields.category;
+      target.subCategory = fields.subCategory;
       target.grams = fields.grams;
       target.price = fields.price;
       target.count = fields.count;
@@ -1770,14 +1688,28 @@
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({ action: "update", row, ...fields })
-    }).then(() => {
-      loadItems();
+    }).then(async (res) => {
+      let ok = true;
+      try{
+        const data = JSON.parse(await res.text());
+        ok = data.status === "ok";
+        if(!ok && target) target.uploadError = true;
+      }catch(parseErr){ /* 忽略解析錯誤，畫面已是最新資料 */ }
+      if(target) target.updating = false;
+      setSyncState(ok ? "ok" : "error", ok
+        ? ("已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}))
+        : "更新可能失敗，請按 ↻ 重新整理確認");
+      renderTable();
     }).catch((err) => {
+      if(target) target.updating = false;
       setSyncState("error", "更新失敗：" + err.message);
+      renderTable();
     });
   }
 
   // ---------- 刪除品項 ----------
+  // 同樣道理：刪除後直接在本地移除該筆，並把後面列號的紀錄往前挪一格（試算表刪除列會讓後面的列號往上移），
+  // 不再多打一次全表讀取，刪除的回應速度會快很多。
   async function deleteItem(row){
     if(String(row).startsWith("pending-")){
       items = items.filter(i => i.row !== row);
@@ -1786,14 +1718,39 @@
     }
     if(!scriptUrl) return;
     if(!confirm("確定要刪除這筆紀錄嗎？")) return;
+
+    const idx = items.findIndex(i => i.row === row);
+    const backup = idx !== -1 ? items[idx] : null;
+    if(idx !== -1) items.splice(idx, 1);
+    // 試算表刪除列後，原本列號比被刪除列大的紀錄都要往前挪一格，本地資料才會對得上
+    items.forEach(i => { if(typeof i.row === "number" && i.row > row) i.row -= 1; });
+
+    renderLocationOptions();
+    renderCategoryChips();
+    renderTable();
+    setSyncState("syncing", "背景刪除中…");
+
     try{
-      await fetch(scriptUrl, {
+      const res = await fetch(scriptUrl, {
         method: "POST",
         headers: {"Content-Type": "text/plain;charset=utf-8"},
         body: JSON.stringify({ action: "delete", row })
       });
-      await loadItems();
+      let ok = true;
+      try{ ok = JSON.parse(await res.text()).status === "ok"; }catch(parseErr){}
+      setSyncState(ok ? "ok" : "error", ok
+        ? ("已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}))
+        : "刪除可能失敗，請按 ↻ 重新整理確認");
     }catch(err){
+      // 失敗就還原本地狀態，避免畫面跟試算表不一致
+      if(backup){
+        items.forEach(i => { if(typeof i.row === "number" && i.row >= row) i.row += 1; });
+        items.splice(idx, 0, backup);
+      }
+      renderLocationOptions();
+      renderCategoryChips();
+      renderTable();
+      setSyncState("error", "刪除失敗：" + err.message);
       alert("刪除失敗：" + err.message);
     }
   }
@@ -1802,7 +1759,7 @@
   const childCategoryChips = $("childCategoryChips");
 
   function renderCategoryChips(){
-    renderCategoryParentOptions();
+    renderCategoryDatalists();
 
     const tree = buildCategoryTree();
     const parents = Array.from(tree.keys()).sort();
@@ -1860,15 +1817,15 @@
 
   // ---------- 表格渲染 ----------
 
-  // 依「類別」建立分組：同一品項若有多個類別，會同時計入每個類別的排名
+  // 依「主類別/子類別」完整路徑建立分組，用來算同類別內的 CP 值排名
   function buildCategoryMap(){
     const map = new Map();
     items.forEach(i => {
       if(i.pending) return;
-      (i.categories || []).forEach(c => {
-        if(!map.has(c)) map.set(c, []);
-        map.get(c).push(i);
-      });
+      const path = itemCategoryPath(i);
+      if(!path) return;
+      if(!map.has(path)) map.set(path, []);
+      map.get(path).push(i);
     });
     return map;
   }
@@ -1883,18 +1840,16 @@
     return "red";
   }
 
-  // 該品項在「每一個」所屬類別中的 CP 值名次（同類別內由低到高排序，數字越小越划算）
+  // 該品項在所屬類別（主類別/子類別完整路徑）中的 CP 值名次（由低到高，數字越小越划算）
   function rankInfoFor(item, categoryMap){
-    const results = [];
-    (item.categories || []).forEach(cat => {
-      const group = categoryMap.get(cat);
-      if(!group || group.length < 2) return;
-      const sorted = group.slice().sort((a,b) => a.cp - b.cp);
-      const idx = sorted.indexOf(item);
-      if(idx === -1) return;
-      results.push({ cat, rank: idx + 1, total: sorted.length });
-    });
-    return results;
+    const cat = itemCategoryPath(item);
+    if(!cat) return [];
+    const group = categoryMap.get(cat);
+    if(!group || group.length < 2) return [];
+    const sorted = group.slice().sort((a,b) => a.cp - b.cp);
+    const idx = sorted.indexOf(item);
+    if(idx === -1) return [];
+    return [{ cat, rank: idx + 1, total: sorted.length }];
   }
 
   function updateCategoryStatsBar(){
@@ -1902,7 +1857,7 @@
       categoryStatsBar.classList.remove("show");
       return;
     }
-    const group = items.filter(i => !i.pending && categoryMatches(i.categories, activeCategory));
+    const group = items.filter(i => !i.pending && categoryMatches(i, activeCategory));
     if(group.length === 0){
       categoryStatsBar.classList.remove("show");
       return;
@@ -1919,7 +1874,7 @@
     updateCategoryStatsBar();
 
     let list = items.filter(i => {
-      const matchCat = categoryMatches(i.categories, activeCategory);
+      const matchCat = categoryMatches(i, activeCategory);
       const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
       return matchCat && matchSearch;
     });
@@ -1968,7 +1923,7 @@
         else if(idx === arr.length - 1) tier = "red";
         else tier = "amber";
       } else {
-        const cat = (item.categories || [])[0];
+        const cat = itemCategoryPath(item);
         const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
         tier = tierFor(item, sameCategory);
       }
@@ -1986,11 +1941,9 @@
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
-      const catBadges = (item.categories || []).map(c => {
-        const { parent, child } = splitCategoryPath(c);
-        const label = child ? `${escapeHtml(parent)} ▸ ${escapeHtml(child)}` : escapeHtml(parent);
-        return `<span class="cat-badge">${label}</span>`;
-      }).join("");
+      const catBadges = item.category
+        ? `<span class="cat-badge">${escapeHtml(item.category)}${item.subCategory ? ` ▸ ${escapeHtml(item.subCategory)}` : ""}</span>`
+        : "";
       const actions = item.pending
         ? (item.uploadError
             ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`

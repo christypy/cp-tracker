@@ -15,13 +15,23 @@
  *    把這組網址貼到網站的「設定同步網址」欄位
  *
  * 試算表第一列（標題列）請依序填入：
- * 品項名稱 | 類別 | 克數 | 價格 | 數量 | 單罐價格 | CP值 | 日期 | 地點 | 新增時間
+ * 品項名稱 | 類別 | 子類別 | 克數 | 價格 | 數量 | 單罐價格 | CP值 | 日期 | 地點 | 新增時間
  *
+ * 「類別」是主類別（必填，例如「零食」）；「子類別」是選填的細分類（例如「甜的」），
+ * 沒有子類別時這一格留空即可。
  * 「日期」是使用者自己填的購買日期；「地點」是購買地點（例如全聯、寶雅…）；
  * 「新增時間」是系統自動寫入的紀錄時間。
+ *
+ * ⚠ 如果你是從舊版（沒有「子類別」欄位）升級上來：
+ *    請在試算表裡「類別」欄位右邊手動插入一個新欄，標題列填「子類別」，
+ *    這樣舊資料的「地點」「新增時間」等欄位才不會被錯位覆蓋。
+ *    舊資料本來就沒有子類別，留空即可，之後編輯該筆紀錄時再補上就會存進新欄位。
  */
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
+
+// 欄位固定順序（對應試算表由左到右的欄）
+const FIELD_ORDER = ['品項名稱', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
 
 function getSheet_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
@@ -50,13 +60,34 @@ function doGet(e) {
       if (!row[0]) return; // 跳過空白列
       const obj = {};
       headers.forEach((h, idx) => { obj[h] = row[idx]; });
-      obj._row = i + 2; // 對應到試算表的實際列號（用於刪除）
+      obj._row = i + 2; // 對應到試算表的實際列號（用於刪除／編輯）
       items.push(obj);
     });
     return jsonOut_({ status: 'ok', items });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
+}
+
+// 從 request body 整理出一筆品項的欄位，並做基本驗證
+function parseItemFields_(body) {
+  const name = String(body.name || '').trim();
+  const category = String(body.category || '').trim(); // 主類別（必填）
+  const subCategory = String(body.subCategory || '').trim(); // 子類別（選填）
+  const grams = Number(body.grams);
+  const price = Number(body.price);
+  const count = Number(body.count) || 1;
+  const date = String(body.date || '').trim();
+  const location = String(body.location || '').trim();
+
+  if (!name || !category || !(grams > 0) || isNaN(price) || count < 1) {
+    throw new Error('欄位不完整或格式錯誤（品項名稱／主類別／克數／價格為必填，子類別可留空）');
+  }
+
+  const unitPrice = +(price / count).toFixed(2);
+  const cp = +(price / (grams * count)).toFixed(4);
+
+  return { name, category, subCategory, grams, price, count, unitPrice, cp, date, location };
 }
 
 // 新增 / 刪除 / 編輯品項
@@ -75,44 +106,24 @@ function doPost(e) {
     if (body.action === 'update') {
       const row = Number(body.row);
       if (row < 2) throw new Error('無效的列號');
-      const name = String(body.name || '').trim();
-      const category = String(body.category || '').trim();
-      const grams = Number(body.grams);
-      const price = Number(body.price);
-      const count = Number(body.count) || 1;
-      const date = String(body.date || '').trim();
-      const location = String(body.location || '').trim();
+      const f = parseItemFields_(body);
 
-      if (!name || !category || !(grams > 0) || isNaN(price) || count < 1) {
-        throw new Error('欄位不完整或格式錯誤');
-      }
-
-      const unitPrice = +(price / count).toFixed(2);
-      const cp = +(price / (grams * count)).toFixed(4);
-      
-      // 更新前 9 欄（品項名稱～地點），第 10 欄「新增時間」維護原本紀錄不變
-      sheet.getRange(row, 1, 1, 9).setValues([[name, category, grams, price, count, unitPrice, cp, date, location]]);
-      return jsonOut_({ status: 'ok', cp, unitPrice });
+      // 更新前 10 欄（品項名稱～地點），第 11 欄「新增時間」維護原本紀錄不變
+      sheet.getRange(row, 1, 1, 10).setValues([[
+        f.name, f.category, f.subCategory, f.grams, f.price, f.count, f.unitPrice, f.cp, f.date, f.location
+      ]]);
+      return jsonOut_({ status: 'ok', row, cp: f.cp, unitPrice: f.unitPrice });
     }
 
     // 預設為新增品項
-    const name = String(body.name || '').trim();
-    const category = String(body.category || '').trim();
-    const grams = Number(body.grams);
-    const price = Number(body.price);
-    const count = Number(body.count) || 1;
-    const date = String(body.date || '').trim();
-    const location = String(body.location || '').trim();
+    const f = parseItemFields_(body);
+    sheet.appendRow([
+      f.name, f.category, f.subCategory, f.grams, f.price, f.count, f.unitPrice, f.cp, f.date, f.location, new Date()
+    ]);
 
-    if (!name || !category || !(grams > 0) || isNaN(price) || count < 1) {
-      throw new Error('欄位不完整或格式錯誤');
-    }
-
-    const unitPrice = +(price / count).toFixed(2);
-    const cp = +(price / (grams * count)).toFixed(4);
-    sheet.appendRow([name, category, grams, price, count, unitPrice, cp, date, location, new Date()]);
-
-    return jsonOut_({ status: 'ok', cp, unitPrice });
+    // 直接回傳這筆新資料實際寫入的列號，前端就不需要再整張表重新讀取一次
+    const row = sheet.getLastRow();
+    return jsonOut_({ status: 'ok', row, cp: f.cp, unitPrice: f.unitPrice });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
