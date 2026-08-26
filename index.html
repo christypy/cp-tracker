@@ -246,6 +246,20 @@
     border-color:var(--ink);
     color:var(--paper);
   }
+  .chip.sub{
+    font-size:11px;
+    padding:5px 10px;
+    border-style:dashed;
+  }
+  .chip.sub.active{
+    background:var(--amber);
+    border-color:var(--amber);
+    color:var(--white);
+  }
+  #childCategoryChips{
+    margin-top:8px;
+  }
+  #childCategoryChips:empty{margin-top:0;}
   #searchInput{
     font-family:'Noto Sans TC', sans-serif;
     padding:8px 12px;
@@ -486,6 +500,7 @@
     gap:8px;
   }
   .cat-input-row select{flex:1;}
+  .cat-input-row select:disabled{opacity:.5;}
   .cat-manual-btn{
     font-family:'Space Mono', monospace;
     font-size:12px;
@@ -730,15 +745,21 @@
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
       </div>
       <div class="field full">
-        <label>類別（可複選）</label>
+        <label>類別（可複選，支援主類別／子類別）</label>
         <div class="cat-input-row">
-          <select id="categoryDropdown">
-            <option value="">-- 選擇既有類別 --</option>
+          <select id="categoryParentSelect">
+            <option value="">-- 主類別 --</option>
           </select>
+          <select id="categoryChildSelect" disabled>
+            <option value="">（不指定子類別）</option>
+          </select>
+        </div>
+        <div class="cat-input-row" style="margin-top:8px;">
+          <button type="button" id="categoryAddBtn" class="cat-manual-btn" style="flex:1;">＋ 加入這個類別</button>
           <button type="button" id="categoryManualBtn" class="cat-manual-btn">✎ 手動輸入</button>
         </div>
         <div class="cat-manual-row" id="categoryManualRow" style="display:none;">
-          <input type="text" id="categoryManualInput" placeholder="輸入新類別，Enter 或點新增">
+          <input type="text" id="categoryManualInput" placeholder="例如 喝的/氣泡，或直接輸入單一類別">
           <button type="button" id="categoryManualAddBtn">新增</button>
         </div>
         <div class="cat-chips-selected" id="categoryChipsSelected"></div>
@@ -775,14 +796,17 @@
   </section>
 
   <!-- 篩選 / 搜尋 -->
-  <section class="controls">
-    <div class="chips" id="categoryChips">
-      <button class="chip active" data-cat="__all__">全部</button>
+  <section class="controls" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+      <div class="chips" id="categoryChips">
+        <button class="chip active" data-cat="__all__">全部</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
+        <input type="text" id="searchInput" placeholder="搜尋品項…">
+      </div>
     </div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
-      <input type="text" id="searchInput" placeholder="搜尋品項…">
-    </div>
+    <div class="chips" id="childCategoryChips"></div>
   </section>
 
   <div id="categoryStatsBar"></div>
@@ -913,8 +937,47 @@
 
   scriptUrlInput.value = scriptUrl;
 
-  // ---------- 類別（可複選）管理 ----------
-  const categoryDropdown = $("categoryDropdown");
+  // ---------- 類別（主類別／子類別，可複選）管理 ----------
+  const CATEGORY_SEP = "/";
+
+  // 預設的類別樹：主類別 -> 子類別清單。子類別彼此不互斥（例如零食可以同時是「甜的」又是「健康的」）
+  const DEFAULT_CATEGORY_TREE = {
+    "喝的": ["乳製品", "茶", "氣泡"],
+    "零食": ["甜的", "鹹的", "健康的"]
+  };
+
+  function splitCategoryPath(path){
+    const idx = path.indexOf(CATEGORY_SEP);
+    if(idx === -1) return { parent: path, child: "" };
+    return { parent: path.slice(0, idx), child: path.slice(idx + 1) };
+  }
+
+  function joinCategoryPath(parent, child){
+    return child ? (parent + CATEGORY_SEP + child) : parent;
+  }
+
+  // 依目前所有紀錄動態彙整出「主類別 -> 子類別清單」，並與預設類別樹合併
+  function buildCategoryTree(){
+    const tree = new Map();
+    Object.keys(DEFAULT_CATEGORY_TREE).forEach(p => tree.set(p, new Set(DEFAULT_CATEGORY_TREE[p])));
+    items.forEach(i => (i.categories || []).forEach(c => {
+      const { parent, child } = splitCategoryPath(c);
+      if(!parent) return;
+      if(!tree.has(parent)) tree.set(parent, new Set());
+      if(child) tree.get(parent).add(child);
+    }));
+    return tree;
+  }
+
+  // filterValue 為 "__all__"、單一主類別（例如「零食」）、或完整路徑（例如「零食/甜的」）
+  function categoryMatches(categories, filterValue){
+    if(filterValue === "__all__") return true;
+    return (categories || []).some(c => c === filterValue || c.indexOf(filterValue + CATEGORY_SEP) === 0);
+  }
+
+  const categoryParentSelect = $("categoryParentSelect");
+  const categoryChildSelect = $("categoryChildSelect");
+  const categoryAddBtn = $("categoryAddBtn");
   const categoryManualBtn = $("categoryManualBtn");
   const categoryManualRow = $("categoryManualRow");
   const categoryManualInput = $("categoryManualInput");
@@ -928,16 +991,47 @@
     return Array.from(set).sort();
   }
 
-  function renderCategoryDropdownOptions(){
-    const known = getAllKnownCategories();
-    categoryDropdown.innerHTML = '<option value="">-- 選擇既有類別 --</option>' +
-      known.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  function renderCategoryParentOptions(){
+    const tree = buildCategoryTree();
+    const current = categoryParentSelect.value;
+    const parents = Array.from(tree.keys()).sort();
+    categoryParentSelect.innerHTML = '<option value="">-- 主類別 --</option>' +
+      parents.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+    if(parents.includes(current)){
+      categoryParentSelect.value = current;
+    }
+    renderCategoryChildOptions();
   }
 
+  function renderCategoryChildOptions(){
+    const tree = buildCategoryTree();
+    const parent = categoryParentSelect.value;
+    const children = parent && tree.has(parent) ? Array.from(tree.get(parent)).sort() : [];
+    categoryChildSelect.innerHTML = '<option value="">（不指定子類別）</option>' +
+      children.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    categoryChildSelect.disabled = !parent;
+    categoryChildSelect.value = "";
+  }
+
+  categoryParentSelect.addEventListener("change", renderCategoryChildOptions);
+
+  categoryAddBtn.addEventListener("click", () => {
+    const parent = categoryParentSelect.value;
+    if(!parent){
+      categoryParentSelect.focus();
+      return;
+    }
+    const child = categoryChildSelect.value;
+    addSelectedCategory(joinCategoryPath(parent, child));
+    categoryChildSelect.value = "";
+  });
+
   function renderSelectedCategoryChips(){
-    categoryChipsSelectedEl.innerHTML = selectedCategories.map(c => `
-      <span class="cat-chip">${escapeHtml(c)}<button type="button" class="cat-chip-x" data-cat="${escapeHtml(c)}">✕</button></span>
-    `).join("");
+    categoryChipsSelectedEl.innerHTML = selectedCategories.map(c => {
+      const { parent, child } = splitCategoryPath(c);
+      const label = child ? `${escapeHtml(parent)} <span class="mono" style="opacity:.75;">▸ ${escapeHtml(child)}</span>` : escapeHtml(parent);
+      return `<span class="cat-chip">${label}<button type="button" class="cat-chip-x" data-cat="${escapeHtml(c)}">✕</button></span>`;
+    }).join("");
     categoryChipsSelectedEl.querySelectorAll(".cat-chip-x").forEach(btn => {
       btn.addEventListener("click", () => {
         selectedCategories = selectedCategories.filter(c => c !== btn.dataset.cat);
@@ -956,17 +1050,11 @@
   function resetCategorySelection(){
     selectedCategories = [];
     renderSelectedCategoryChips();
-    categoryDropdown.value = "";
+    categoryParentSelect.value = "";
+    renderCategoryChildOptions();
     categoryManualInput.value = "";
     categoryManualRow.style.display = "none";
   }
-
-  categoryDropdown.addEventListener("change", () => {
-    if(categoryDropdown.value){
-      addSelectedCategory(categoryDropdown.value);
-      categoryDropdown.value = "";
-    }
-  });
 
   categoryManualBtn.addEventListener("click", () => {
     const showing = categoryManualRow.style.display !== "none";
@@ -1495,6 +1583,8 @@
     $("itemName").value = item.name;
     selectedCategories = (item.categories || []).slice();
     renderSelectedCategoryChips();
+    categoryParentSelect.value = "";
+    renderCategoryChildOptions();
     categoryManualRow.style.display = "none";
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
@@ -1575,10 +1665,18 @@
     }
   }
 
-  // ---------- 類別篩選 ----------
+  // ---------- 類別篩選（主類別 + 子類別兩層） ----------
+  const childCategoryChips = $("childCategoryChips");
+
   function renderCategoryChips(){
-    const cats = getAllKnownCategories();
-    renderCategoryDropdownOptions();
+    renderCategoryParentOptions();
+
+    const tree = buildCategoryTree();
+    const parents = Array.from(tree.keys()).sort();
+    const activeInfo = splitCategoryPath(activeCategory === "__all__" ? "" : activeCategory);
+    const activeParent = activeCategory === "__all__" ? "" : activeInfo.parent;
+
+    // ---- 主類別列 ----
     categoryChips.innerHTML = "";
     const allChip = document.createElement("button");
     allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
@@ -1586,14 +1684,33 @@
     allChip.dataset.cat = "__all__";
     allChip.addEventListener("click", () => { activeCategory = "__all__"; renderCategoryChips(); renderTable(); });
     categoryChips.appendChild(allChip);
-    cats.forEach(c => {
+    parents.forEach(p => {
       const chip = document.createElement("button");
-      chip.className = "chip" + (activeCategory === c ? " active" : "");
-      chip.textContent = c;
-      chip.dataset.cat = c;
-      chip.addEventListener("click", () => { activeCategory = c; renderCategoryChips(); renderTable(); });
+      chip.className = "chip" + (activeParent === p ? " active" : "");
+      chip.textContent = p;
+      chip.dataset.cat = p;
+      chip.addEventListener("click", () => { activeCategory = p; renderCategoryChips(); renderTable(); });
       categoryChips.appendChild(chip);
     });
+
+    // ---- 子類別列：只在選了某個主類別時顯示 ----
+    childCategoryChips.innerHTML = "";
+    if(activeParent && tree.has(activeParent)){
+      const children = Array.from(tree.get(activeParent)).sort();
+      children.forEach(c => {
+        const fullPath = joinCategoryPath(activeParent, c);
+        const chip = document.createElement("button");
+        chip.className = "chip sub" + (activeCategory === fullPath ? " active" : "");
+        chip.textContent = c;
+        chip.dataset.cat = fullPath;
+        chip.addEventListener("click", () => {
+          activeCategory = (activeCategory === fullPath) ? activeParent : fullPath;
+          renderCategoryChips();
+          renderTable();
+        });
+        childCategoryChips.appendChild(chip);
+      });
+    }
   }
 
   $("searchInput").addEventListener("input", (e) => {
@@ -1652,14 +1769,16 @@
       categoryStatsBar.classList.remove("show");
       return;
     }
-    const group = items.filter(i => !i.pending && (i.categories || []).includes(activeCategory));
+    const group = items.filter(i => !i.pending && categoryMatches(i.categories, activeCategory));
     if(group.length === 0){
       categoryStatsBar.classList.remove("show");
       return;
     }
     const avg = group.reduce((sum, i) => sum + i.cp, 0) / group.length;
     const best = group.slice().sort((a,b) => a.cp - b.cp)[0];
-    categoryStatsBar.innerHTML = `類別「<strong>${escapeHtml(activeCategory)}</strong>」平均 CP 值：<strong>${avg.toFixed(3)}</strong> $/g（共 ${group.length} 筆・最划算 ${best.cp.toFixed(3)}）`;
+    const { parent, child } = splitCategoryPath(activeCategory);
+    const label = child ? `${escapeHtml(parent)} ▸ ${escapeHtml(child)}` : escapeHtml(parent);
+    categoryStatsBar.innerHTML = `類別「<strong>${label}</strong>」平均 CP 值：<strong>${avg.toFixed(3)}</strong> $/g（共 ${group.length} 筆・最划算 ${best.cp.toFixed(3)}）`;
     categoryStatsBar.classList.add("show");
   }
 
@@ -1667,7 +1786,7 @@
     updateCategoryStatsBar();
 
     let list = items.filter(i => {
-      const matchCat = activeCategory === "__all__" || (i.categories || []).includes(activeCategory);
+      const matchCat = categoryMatches(i.categories, activeCategory);
       const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
       return matchCat && matchSearch;
     });
@@ -1722,9 +1841,11 @@
       }
 
       const rankInfos = !item.pending ? rankInfoFor(item, categoryMap) : [];
-      const rankBadge = rankInfos.map(r =>
-        `<span class="rank-badge" title="在「${escapeHtml(r.cat)}」類別中依 CP 值由低到高排名，數字越小越划算">${escapeHtml(r.cat)} 第${r.rank}名／${r.total}</span>`
-      ).join("");
+      const rankBadge = rankInfos.map(r => {
+        const { parent, child } = splitCategoryPath(r.cat);
+        const label = child ? `${escapeHtml(parent)}▸${escapeHtml(child)}` : escapeHtml(parent);
+        return `<span class="rank-badge" title="在「${label}」類別中依 CP 值由低到高排名，數字越小越划算">${label} 第${r.rank}名／${r.total}</span>`;
+      }).join("");
       const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
       const convertedBadge = (isRep && multi && (item.count || 1) > 1)
         ? `<span class="best-badge" title="換算成單一件（1入）在同樣克數/毫升下的價格">・換算1入：$${formatNum(item.unitPrice)}／${formatNum(item.grams)}g</span>`
@@ -1732,7 +1853,11 @@
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
-      const catBadges = (item.categories || []).map(c => `<span class="cat-badge">${escapeHtml(c)}</span>`).join("");
+      const catBadges = (item.categories || []).map(c => {
+        const { parent, child } = splitCategoryPath(c);
+        const label = child ? `${escapeHtml(parent)} ▸ ${escapeHtml(child)}` : escapeHtml(parent);
+        return `<span class="cat-badge">${label}</span>`;
+      }).join("");
       const actions = item.pending
         ? (item.uploadError
             ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
