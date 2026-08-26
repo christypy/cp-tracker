@@ -17,8 +17,8 @@
  * 試算表第一列（標題列）請依序填入：
  * 品項名稱 | 類別 | 子類別 | 克數 | 價格 | 數量 | 單罐價格 | CP值 | 日期 | 地點 | 新增時間
  *
- * 「類別」是主類別（必填，例如「零食」）；「子類別」是選填的細分類（例如「甜的」），
- * 沒有子類別時這一格留空即可。
+ * 「類別」是主類別（必填，例如「零食」）；「子類別」是選填的細分類，可以複選
+ * （例如「甜的,鹹的」，多個子類別用半形逗號分隔），沒有子類別時這一格留空即可。
  * 「日期」是使用者自己填的購買日期；「地點」是購買地點（例如全聯、寶雅…）；
  * 「新增時間」是系統自動寫入的紀錄時間。
  *
@@ -73,7 +73,10 @@ function doGet(e) {
 function parseItemFields_(body) {
   const name = String(body.name || '').trim();
   const category = String(body.category || '').trim(); // 主類別（必填）
-  const subCategory = String(body.subCategory || '').trim(); // 子類別（選填）
+  // 子類別（選填，可複選）：前端可能傳陣列（多選）或字串，統一轉成用逗號分隔的字串存進試算表
+  const subCategory = Array.isArray(body.subCategory)
+    ? body.subCategory.map(s => String(s).trim()).filter(Boolean).join(',')
+    : String(body.subCategory || '').trim();
   const grams = Number(body.grams);
   const price = Number(body.price);
   const count = Number(body.count) || 1;

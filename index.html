@@ -810,9 +810,18 @@
         <datalist id="categoryParentList"></datalist>
       </div>
       <div class="field full">
-        <label for="categoryChildInput">子類別（選填）</label>
-        <input type="text" id="categoryChildInput" list="categoryChildList" placeholder="例如 甜的（選填，可留空或直接輸入新子類別）" autocomplete="off">
-        <datalist id="categoryChildList"></datalist>
+        <label for="categoryChildSelect">子類別（選填，可複選）</label>
+        <div class="cat-input-row">
+          <select id="categoryChildSelect" disabled>
+            <option value="">-- 選擇子類別 --</option>
+          </select>
+          <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
+        </div>
+        <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
+          <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
+          <button type="button" id="categoryChildManualAddBtn">加入</button>
+        </div>
+        <div class="cat-chips-selected" id="categoryChildChips"></div>
       </div>
       <div class="field full">
         <label for="itemDate">日期</label>
@@ -995,16 +1004,12 @@
   }
   setSyncState(null, "尚未同步");
 
-  // ---------- 類別（主類別 必填／子類別 選填）管理 ----------
-  // 邏輯很單純：每筆紀錄一定要有一個主類別，子類別可有可無。
-  // 例如：果凍 → 主類別「零食」、子類別「甜的」；子類別留空就只算在主類別底下。
+  // ---------- 類別（主類別 必填／子類別 選填、可複選）管理 ----------
+  // 邏輯：每筆紀錄一定要有一個主類別，子類別可以不選、選一個、或選多個。
+  // 例如：果凍 → 主類別「零食」、子類別「甜的」「健康的」；子類別留空就只算在主類別底下。
+  // 子類別的建議選項一律只從「目前實際存在的資料」彙整出來，不提供任何預設／假想的選項，
+  // 所以新類別一開始不會有任何子類別可選，要靠使用者自己新增。
   const CATEGORY_SEP = "/";
-
-  // 預設的類別樹：主類別 -> 子類別清單，僅作為輸入時的建議選項
-  const DEFAULT_CATEGORY_TREE = {
-    "喝的": ["乳製品", "茶", "氣泡"],
-    "零食": ["甜的", "鹹的", "健康的"]
-  };
 
   function splitCategoryPath(path){
     const s = String(path || "");
@@ -1017,20 +1022,34 @@
     return child ? (parent + CATEGORY_SEP + child) : parent;
   }
 
-  // 品項實際所屬的完整類別路徑（主類別，或「主類別/子類別」）
-  function itemCategoryPath(item){
-    if(!item || !item.category) return "";
-    return item.subCategory ? joinCategoryPath(item.category, item.subCategory) : item.category;
+  // 把一筆紀錄的子類別欄位（試算表裡是逗號分隔的字串）拆成陣列
+  function subCategoriesOf(item){
+    const raw = item && item.subCategory ? String(item.subCategory) : "";
+    return raw.split(",").map(s => s.trim()).filter(Boolean);
   }
 
-  // 依目前所有紀錄動態彙整出「主類別 -> 子類別清單」，並與預設類別樹合併
+  // 品項實際所屬的完整類別路徑清單：每個子類別各自一條「主類別/子類別」路徑，
+  // 若完全沒有子類別，就只有一條「主類別」路徑
+  function itemCategoryPaths(item){
+    if(!item || !item.category) return [];
+    const subs = subCategoriesOf(item);
+    if(subs.length === 0) return [item.category];
+    return subs.map(s => joinCategoryPath(item.category, s));
+  }
+
+  // 用於單一顏色分級（tier）等只需要「代表路徑」的情境，取第一個子類別路徑
+  function itemPrimaryCategoryPath(item){
+    const paths = itemCategoryPaths(item);
+    return paths.length ? paths[0] : "";
+  }
+
+  // 依目前所有紀錄動態彙整出「主類別 -> 子類別清單」，只反映實際存在的資料，沒有任何預設選項
   function buildCategoryTree(){
     const tree = new Map();
-    Object.keys(DEFAULT_CATEGORY_TREE).forEach(p => tree.set(p, new Set(DEFAULT_CATEGORY_TREE[p])));
     items.forEach(i => {
       if(!i.category) return;
       if(!tree.has(i.category)) tree.set(i.category, new Set());
-      if(i.subCategory) tree.get(i.category).add(i.subCategory);
+      subCategoriesOf(i).forEach(c => tree.get(i.category).add(c));
     });
     return tree;
   }
@@ -1038,37 +1057,105 @@
   // filterValue 為 "__all__"、單一主類別（例如「零食」）、或完整路徑（例如「零食/甜的」）
   function categoryMatches(item, filterValue){
     if(filterValue === "__all__") return true;
-    const path = itemCategoryPath(item);
-    if(!path) return false;
-    return path === filterValue || path.indexOf(filterValue + CATEGORY_SEP) === 0;
+    const { parent, child } = splitCategoryPath(filterValue);
+    if(item.category !== parent) return false;
+    if(!child) return true;
+    return subCategoriesOf(item).includes(child);
   }
 
   const categoryParentInput = $("categoryParentInput");
-  const categoryChildInput = $("categoryChildInput");
   const categoryParentList = $("categoryParentList");
-  const categoryChildList = $("categoryChildList");
+  const categoryChildSelect = $("categoryChildSelect");
+  const categoryChildChips = $("categoryChildChips");
+  const categoryChildManualBtn = $("categoryChildManualBtn");
+  const categoryChildManualRow = $("categoryChildManualRow");
+  const categoryChildManualInput = $("categoryChildManualInput");
+  const categoryChildManualAddBtn = $("categoryChildManualAddBtn");
 
-  // 依目前資料重新整理「主類別」「子類別」的建議清單（datalist）
+  // 目前表單上已選取的子類別（可複選）
+  let selectedSubCategories = [];
+
+  // 依目前資料重新整理「主類別」建議清單（datalist）
   function renderCategoryDatalists(){
     const tree = buildCategoryTree();
     const parents = Array.from(tree.keys()).sort();
     categoryParentList.innerHTML = parents.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
-    updateChildDatalist();
+    updateChildSelect();
   }
 
-  function updateChildDatalist(){
+  // 依目前輸入的主類別，重新整理子類別下拉選單：只列出「已經存在」且「尚未選取」的子類別，
+  // 完全沒有任何預設選項；如果沒有任何可選的子類別，下拉選單會停用，但仍可用「新增子類別」手動加入
+  function updateChildSelect(){
     const tree = buildCategoryTree();
     const parent = categoryParentInput.value.trim();
-    const children = parent && tree.has(parent) ? Array.from(tree.get(parent)).sort() : [];
-    categoryChildList.innerHTML = children.map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
+    const existing = parent && tree.has(parent) ? Array.from(tree.get(parent)).sort() : [];
+    const available = existing.filter(c => !selectedSubCategories.includes(c));
+    categoryChildSelect.innerHTML = '<option value="">-- 選擇子類別 --</option>' +
+      available.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    categoryChildSelect.disabled = available.length === 0;
   }
 
-  categoryParentInput.addEventListener("input", updateChildDatalist);
+  function renderSelectedSubCategoryChips(){
+    categoryChildChips.innerHTML = selectedSubCategories.map(c => `
+      <span class="cat-chip">${escapeHtml(c)}<button type="button" class="cat-chip-x" data-sub="${escapeHtml(c)}" title="移除">✕</button></span>
+    `).join("");
+  }
+
+  function addSelectedSubCategory(name){
+    const c = String(name || "").trim();
+    if(!c || selectedSubCategories.includes(c)) return;
+    selectedSubCategories.push(c);
+    renderSelectedSubCategoryChips();
+    updateChildSelect();
+  }
+
+  function removeSelectedSubCategory(name){
+    selectedSubCategories = selectedSubCategories.filter(c => c !== name);
+    renderSelectedSubCategoryChips();
+    updateChildSelect();
+  }
+
+  categoryChildChips.addEventListener("click", (e) => {
+    const btn = e.target.closest(".cat-chip-x");
+    if(!btn) return;
+    removeSelectedSubCategory(btn.dataset.sub);
+  });
+
+  categoryParentInput.addEventListener("input", updateChildSelect);
+
+  categoryChildSelect.addEventListener("change", () => {
+    if(categoryChildSelect.value){
+      addSelectedSubCategory(categoryChildSelect.value);
+    }
+  });
+
+  categoryChildManualBtn.addEventListener("click", () => {
+    const showing = categoryChildManualRow.style.display !== "none";
+    categoryChildManualRow.style.display = showing ? "none" : "flex";
+    if(!showing) categoryChildManualInput.focus();
+  });
+
+  function addManualSubCategory(){
+    addSelectedSubCategory(categoryChildManualInput.value);
+    categoryChildManualInput.value = "";
+    categoryChildManualInput.focus();
+  }
+
+  categoryChildManualAddBtn.addEventListener("click", addManualSubCategory);
+  categoryChildManualInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      e.preventDefault();
+      addManualSubCategory();
+    }
+  });
 
   function resetCategorySelection(){
     categoryParentInput.value = "";
-    categoryChildInput.value = "";
-    updateChildDatalist();
+    selectedSubCategories = [];
+    categoryChildManualRow.style.display = "none";
+    categoryChildManualInput.value = "";
+    renderSelectedSubCategoryChips();
+    updateChildSelect();
   }
 
   // ---------- 新增表單內的即時試算 ----------
@@ -1567,7 +1654,7 @@
     }
     const name = $("itemName").value.trim();
     const category = categoryParentInput.value.trim();
-    const subCategory = categoryChildInput.value.trim();
+    const subCategory = selectedSubCategories.join(",");
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
     const count = parseInt($("itemCount").value, 10) || 1;
@@ -1632,12 +1719,13 @@
     $("itemPrice").value = item.price;
     $("itemCount").value = item.count || 1;
     $("itemName").value = item.name;
-    // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」，
+    // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」「健康的」，
     // 這樣編輯時可以直接看到、也可以直接修改子類別，儲存時會一併更新回試算表
     renderCategoryDatalists();
     categoryParentInput.value = item.category || "";
-    updateChildDatalist();
-    categoryChildInput.value = item.subCategory || "";
+    selectedSubCategories = subCategoriesOf(item);
+    renderSelectedSubCategoryChips();
+    updateChildSelect();
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
@@ -1826,15 +1914,16 @@
 
   // ---------- 表格渲染 ----------
 
-  // 依「主類別/子類別」完整路徑建立分組，用來算同類別內的 CP 值排名
+  // 依「主類別/子類別」完整路徑建立分組，用來算同類別內的 CP 值排名。
+  // 有多個子類別的品項會同時被歸進每一個子類別的分組（例如「甜的」跟「健康的」都各算一組排名）。
   function buildCategoryMap(){
     const map = new Map();
     items.forEach(i => {
       if(i.pending) return;
-      const path = itemCategoryPath(i);
-      if(!path) return;
-      if(!map.has(path)) map.set(path, []);
-      map.get(path).push(i);
+      itemCategoryPaths(i).forEach(path => {
+        if(!map.has(path)) map.set(path, []);
+        map.get(path).push(i);
+      });
     });
     return map;
   }
@@ -1849,16 +1938,17 @@
     return "red";
   }
 
-  // 該品項在所屬類別（主類別/子類別完整路徑）中的 CP 值名次（由低到高，數字越小越划算）
+  // 該品項在所屬類別（主類別/子類別完整路徑）中的 CP 值名次（由低到高，數字越小越划算）。
+  // 若有多個子類別，每個子類別各自回傳一筆名次資訊。
   function rankInfoFor(item, categoryMap){
-    const cat = itemCategoryPath(item);
-    if(!cat) return [];
-    const group = categoryMap.get(cat);
-    if(!group || group.length < 2) return [];
-    const sorted = group.slice().sort((a,b) => a.cp - b.cp);
-    const idx = sorted.indexOf(item);
-    if(idx === -1) return [];
-    return [{ cat, rank: idx + 1, total: sorted.length }];
+    return itemCategoryPaths(item).map(cat => {
+      const group = categoryMap.get(cat);
+      if(!group || group.length < 2) return null;
+      const sorted = group.slice().sort((a,b) => a.cp - b.cp);
+      const idx = sorted.indexOf(item);
+      if(idx === -1) return null;
+      return { cat, rank: idx + 1, total: sorted.length };
+    }).filter(Boolean);
   }
 
   function updateCategoryStatsBar(){
@@ -1932,7 +2022,7 @@
         else if(idx === arr.length - 1) tier = "red";
         else tier = "amber";
       } else {
-        const cat = itemCategoryPath(item);
+        const cat = itemPrimaryCategoryPath(item);
         const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
         tier = tierFor(item, sameCategory);
       }
@@ -1950,8 +2040,9 @@
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
+      const itemSubs = subCategoriesOf(item);
       const catBadges = item.category
-        ? `<span class="cat-badge">${escapeHtml(item.category)}${item.subCategory ? ` ▸ ${escapeHtml(item.subCategory)}` : ""}</span>`
+        ? `<span class="cat-badge">${escapeHtml(item.category)}${itemSubs.length ? ` ▸ ${itemSubs.map(escapeHtml).join("、")}` : ""}</span>`
         : "";
       const actions = item.pending
         ? (item.uploadError
