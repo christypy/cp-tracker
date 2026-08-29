@@ -217,6 +217,57 @@
     color:var(--ink-soft);
   }
 
+  /* ---------- edit hint (shown when editing an existing item) ---------- */
+  .edit-hint{
+    grid-column:1/-1;
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.03em;
+    color:var(--amber);
+    background:rgba(182,134,44,.1);
+    border:1px dashed var(--amber);
+    border-radius:8px;
+    padding:8px 12px;
+    text-align:center;
+  }
+
+  /* ---------- fixed editing panel (編輯時固定在畫面下方，不用往上滑) ---------- */
+  #editBackdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(43,40,32,.4);
+    z-index:490;
+  }
+  #addFormCard.editing-mode{
+    position:fixed;
+    left:16px;
+    right:16px;
+    bottom:14px;
+    margin:0 auto;
+    max-width:848px;
+    max-height:80vh;
+    overflow-y:auto;
+    z-index:500;
+    box-shadow:0 -14px 40px -10px rgba(43,40,32,.5), 0 1px 0 var(--line);
+    animation:editSlideUp .18s ease;
+  }
+  #addFormCard.editing-mode::before{
+    display:none;
+  }
+  @keyframes editSlideUp{
+    from{ transform:translateY(16px); opacity:.6; }
+    to{ transform:translateY(0); opacity:1; }
+  }
+  @media (max-width:560px){
+    #addFormCard.editing-mode{
+      left:8px;
+      right:8px;
+      bottom:8px;
+      max-height:85vh;
+    }
+  }
+
   /* ---------- controls row ---------- */
   .controls{
     display:flex;
@@ -792,6 +843,8 @@
 </head>
 <body>
 
+<div id="editBackdrop"></div>
+
 <header>
   <div class="eyebrow">$ / g Ledger</div>
   <h1>CP值帳本</h1>
@@ -810,9 +863,10 @@
 <main>
 
   <!-- 新增品項（先算再填資料） -->
-  <section class="tag-card">
+  <section class="tag-card" id="addFormCard">
     <p class="card-title" id="formTitle">新增品項</p>
     <form id="addForm">
+      <div class="edit-hint" id="editHint" style="display:none;"></div>
       <div class="field">
         <label for="itemGrams">單罐克數 (g)</label>
         <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
@@ -836,6 +890,11 @@
       <div class="field full">
         <label for="itemName">品項名稱</label>
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
+      </div>
+      <div class="field full">
+        <label for="subCategorySearchInput">🔍 依子類別搜尋帶入主類別（選填）</label>
+        <input type="text" id="subCategorySearchInput" list="subCategorySearchList" placeholder="例如輸入「甜的」，會自動幫你選好主類別" autocomplete="off">
+        <datalist id="subCategorySearchList"></datalist>
       </div>
       <div class="field full">
         <label for="categoryParentSelect">主類別 <span style="color:var(--red);">*必填</span></label>
@@ -899,7 +958,7 @@
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
         <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
-        <input type="text" id="searchInput" placeholder="搜尋品項…">
+        <input type="text" id="searchInput" placeholder="搜尋品項／類別／子類別…">
       </div>
     </div>
     <div class="chips" id="childCategoryChips"></div>
@@ -1110,9 +1169,63 @@
   const categoryChildManualRow = $("categoryChildManualRow");
   const categoryChildManualInput = $("categoryChildManualInput");
   const categoryChildManualAddBtn = $("categoryChildManualAddBtn");
+  const subCategorySearchInput = $("subCategorySearchInput");
+  const subCategorySearchList = $("subCategorySearchList");
 
   // 目前表單上已選取的子類別（可複選）
   let selectedSubCategories = [];
+
+  // 依目前所有資料，彙整「子類別名稱 -> 有出現這個子類別的主類別清單」反向對照表，
+  // 用於「依子類別搜尋帶入主類別」：使用者只記得子類別（例如「甜的」），
+  // 系統就能自動幫忙選好對應的主類別，不用自己想主類別叫什麼
+  function buildSubCategoryReverseMap(){
+    const map = new Map();
+    items.forEach(i => {
+      if(!i.category) return;
+      subCategoriesOf(i).forEach(sub => {
+        if(!map.has(sub)) map.set(sub, new Set());
+        map.get(sub).add(i.category);
+      });
+    });
+    return map;
+  }
+
+  // 重新整理子類別搜尋欄位的建議清單（datalist），列出目前所有實際存在的子類別名稱
+  function renderSubCategorySearchList(){
+    const map = buildSubCategoryReverseMap();
+    const subs = Array.from(map.keys()).sort();
+    subCategorySearchList.innerHTML = subs.map(s => `<option value="${escapeHtml(s)}"></option>`).join("");
+  }
+
+  // 使用者在子類別搜尋欄位輸入（或從建議清單選擇）一個已存在的子類別名稱時，
+  // 自動把對應的主類別帶入「主類別」下拉選單，並直接勾選這個子類別；
+  // 如果同一個子類別名稱出現在多個不同主類別底下，預設帶入第一個（依字母排序），並在訊息裡提醒還有哪些主類別也有這個子類別
+  function applySubCategorySearch(){
+    const term = subCategorySearchInput.value.trim();
+    if(!term) return;
+    const map = buildSubCategoryReverseMap();
+    if(!map.has(term)){
+      formMsg.textContent = `找不到子類別「${term}」，可以直接在下方主類別／子類別欄位手動輸入新的`;
+      return;
+    }
+    const parents = Array.from(map.get(term)).sort();
+    const parent = parents[0];
+    categoryParentSelect.value = parent;
+    renderChildCheckboxes();
+    addSelectedSubCategory(term);
+    subCategorySearchInput.value = "";
+    formMsg.textContent = parents.length > 1
+      ? `已帶入主類別「${parent}」（子類別「${term}」也出現在：${parents.join("、")}，如需其他請手動切換主類別）`
+      : `已自動帶入主類別「${parent}」`;
+  }
+
+  subCategorySearchInput.addEventListener("change", applySubCategorySearch);
+  subCategorySearchInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      e.preventDefault();
+      applySubCategorySearch();
+    }
+  });
 
   // 依目前資料重新整理「主類別」下拉選單，並盡量保留使用者目前選到（或剛手動新增）的值，
   // 就算這個主類別還沒有任何一筆紀錄（剛手動新增、尚未送出表單）也不會被清掉
@@ -1127,6 +1240,7 @@
     }
     categoryParentSelect.innerHTML = optionsHtml;
     categoryParentSelect.value = current;
+    renderSubCategorySearchList();
     renderChildCheckboxes();
   }
 
@@ -1230,6 +1344,7 @@
     categoryParentManualInput.value = "";
     categoryChildManualRow.style.display = "none";
     categoryChildManualInput.value = "";
+    subCategorySearchInput.value = "";
     renderChildCheckboxes();
     updateLiveRank();
   }
@@ -1826,6 +1941,9 @@
   // ---------- 編輯品項 ----------
   const formTitle = $("formTitle");
   const cancelEditBtn = $("cancelEditBtn");
+  const addFormCard = $("addFormCard");
+  const editBackdrop = $("editBackdrop");
+  const editHint = $("editHint");
   let editingRow = null;
 
   function startEdit(item){
@@ -1847,7 +1965,11 @@
     addBtn.textContent = "更新紀錄";
     cancelEditBtn.style.display = "block";
     formMsg.textContent = "";
-    $("itemGrams").scrollIntoView({ behavior: "smooth", block: "center" });
+    editHint.textContent = `✎ 正在編輯「${item.name}」，改完按「更新紀錄」即可，不用捲動頁面`;
+    editHint.style.display = "block";
+    // 編輯表單固定在畫面下方，點列表其他項目時不用再往上滑
+    addFormCard.classList.add("editing-mode");
+    editBackdrop.style.display = "block";
     $("itemGrams").focus();
   }
 
@@ -1862,9 +1984,13 @@
     formTitle.textContent = "新增品項";
     addBtn.textContent = "加入紀錄";
     cancelEditBtn.style.display = "none";
+    editHint.style.display = "none";
+    addFormCard.classList.remove("editing-mode");
+    editBackdrop.style.display = "none";
   }
 
   cancelEditBtn.addEventListener("click", endEdit);
+  editBackdrop.addEventListener("click", endEdit);
 
   // 編輯後不再整張表重新讀取一次（那是造成「修改後同步很久」的主因：
   // 原本會先送出更新，再多打一次讀取整張試算表的請求，兩次 Apps Script 呼叫疊在一起才慢）。
@@ -2083,12 +2209,21 @@
     categoryStatsBar.classList.add("show");
   }
 
+  // 搜尋框比對邏輯：同時比對品項名稱、主類別、子類別，只要其中一個包含關鍵字就算符合，
+  // 這樣不只能搜品項名稱，也能直接輸入類別或子類別名稱來篩選（例如輸入「甜的」會列出所有「甜的」子類別的品項）
+  function itemMatchesSearch(item, term){
+    if(!term) return true;
+    if(item.name && item.name.toLowerCase().includes(term)) return true;
+    if(item.category && item.category.toLowerCase().includes(term)) return true;
+    return subCategoriesOf(item).some(c => c.toLowerCase().includes(term));
+  }
+
   function renderTable(){
     updateCategoryStatsBar();
 
     let list = items.filter(i => {
       const matchCat = categoryMatches(i, activeCategory);
-      const matchSearch = !searchTerm || i.name.toLowerCase().includes(searchTerm);
+      const matchSearch = itemMatchesSearch(i, searchTerm);
       return matchCat && matchSearch;
     });
 
