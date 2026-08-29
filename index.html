@@ -588,38 +588,71 @@
     border-radius:8px;
     cursor:pointer;
   }
-  .cat-chips-selected{
+  .receipt-row .name .cat-badge-group{
     display:flex;
     flex-wrap:wrap;
-    gap:6px;
-    margin-top:10px;
+    gap:4px;
   }
-  .cat-chips-selected:empty{margin-top:0;}
-  .cat-chip{
+
+  /* ---------- child category checkboxes (勾選式子類別) ---------- */
+  .cat-checkbox-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .cat-checkbox-list:empty::after{
+    content:"目前這個主類別還沒有子類別，可用下方按鈕新增";
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .cat-checkbox-item{
     display:inline-flex;
     align-items:center;
     gap:6px;
     font-family:'Space Mono', monospace;
     font-size:12px;
-    padding:5px 6px 5px 12px;
+    padding:6px 12px;
     border-radius:999px;
-    background:var(--ink);
-    color:var(--paper);
-  }
-  .cat-chip-x{
-    background:none;
-    border:none;
-    color:var(--paper);
-    opacity:.7;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
     cursor:pointer;
-    font-size:11px;
-    padding:2px 6px;
+    user-select:none;
+    transition:background-color .15s ease, color .15s ease, border-color .15s ease;
   }
-  .cat-chip-x:hover{opacity:1;}
-  .receipt-row .name .cat-badge-group{
-    display:flex;
+  .cat-checkbox-item input{
+    accent-color:var(--amber);
+    cursor:pointer;
+    margin:0;
+  }
+  .cat-checkbox-item.checked{
+    background:var(--amber);
+    border-color:var(--amber);
+    color:var(--white);
+  }
+  #categoryChildManualBtn{
+    margin-top:10px;
+  }
+
+  /* ---------- live rank preview（即時排名預覽） ---------- */
+  .live-rank-preview{
+    display:none;
     flex-wrap:wrap;
-    gap:4px;
+    align-items:center;
+    gap:6px;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  .live-rank-preview.show{display:flex;}
+  .live-rank-preview .live-rank-label{
+    font-family:'Space Mono', monospace;
+    letter-spacing:.04em;
+  }
+  .rank-badge.live{
+    background:var(--green);
   }
 
   /* ---------- category average stats bar ---------- */
@@ -805,23 +838,27 @@
         <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
       </div>
       <div class="field full">
-        <label for="categoryParentInput">主類別 <span style="color:var(--red);">*必填</span></label>
-        <input type="text" id="categoryParentInput" list="categoryParentList" placeholder="例如 零食（可直接輸入新類別）" autocomplete="off" required>
-        <datalist id="categoryParentList"></datalist>
+        <label for="categoryParentSelect">主類別 <span style="color:var(--red);">*必填</span></label>
+        <div class="cat-input-row">
+          <select id="categoryParentSelect" required>
+            <option value="">-- 選擇主類別 --</option>
+          </select>
+          <button type="button" class="cat-manual-btn" id="categoryParentManualBtn">新增主類別</button>
+        </div>
+        <div class="cat-manual-row" id="categoryParentManualRow" style="display:none;">
+          <input type="text" id="categoryParentManualInput" placeholder="輸入新主類別名稱" autocomplete="off">
+          <button type="button" id="categoryParentManualAddBtn">加入</button>
+        </div>
       </div>
       <div class="field full">
-        <label for="categoryChildSelect">子類別（選填，可複選）</label>
-        <div class="cat-input-row">
-          <select id="categoryChildSelect" disabled>
-            <option value="">-- 選擇子類別 --</option>
-          </select>
-          <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
-        </div>
+        <label>子類別（選填，可複選）</label>
+        <div class="cat-checkbox-list" id="categoryChildCheckboxes"></div>
         <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
           <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
           <button type="button" id="categoryChildManualAddBtn">加入</button>
         </div>
-        <div class="cat-chips-selected" id="categoryChildChips"></div>
+        <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
+        <div class="live-rank-preview" id="liveRankPreview"></div>
       </div>
       <div class="field full">
         <label for="itemDate">日期</label>
@@ -1063,10 +1100,12 @@
     return subCategoriesOf(item).includes(child);
   }
 
-  const categoryParentInput = $("categoryParentInput");
-  const categoryParentList = $("categoryParentList");
-  const categoryChildSelect = $("categoryChildSelect");
-  const categoryChildChips = $("categoryChildChips");
+  const categoryParentSelect = $("categoryParentSelect");
+  const categoryParentManualBtn = $("categoryParentManualBtn");
+  const categoryParentManualRow = $("categoryParentManualRow");
+  const categoryParentManualInput = $("categoryParentManualInput");
+  const categoryParentManualAddBtn = $("categoryParentManualAddBtn");
+  const categoryChildCheckboxes = $("categoryChildCheckboxes");
   const categoryChildManualBtn = $("categoryChildManualBtn");
   const categoryChildManualRow = $("categoryChildManualRow");
   const categoryChildManualInput = $("categoryChildManualInput");
@@ -1075,57 +1114,92 @@
   // 目前表單上已選取的子類別（可複選）
   let selectedSubCategories = [];
 
-  // 依目前資料重新整理「主類別」建議清單（datalist）
+  // 依目前資料重新整理「主類別」下拉選單，並盡量保留使用者目前選到（或剛手動新增）的值，
+  // 就算這個主類別還沒有任何一筆紀錄（剛手動新增、尚未送出表單）也不會被清掉
   function renderCategoryDatalists(){
     const tree = buildCategoryTree();
     const parents = Array.from(tree.keys()).sort();
-    categoryParentList.innerHTML = parents.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
-    updateChildSelect();
+    const current = categoryParentSelect.value;
+    let optionsHtml = '<option value="">-- 選擇主類別 --</option>' +
+      parents.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+    if(current && !parents.includes(current)){
+      optionsHtml += `<option value="${escapeHtml(current)}">${escapeHtml(current)}</option>`;
+    }
+    categoryParentSelect.innerHTML = optionsHtml;
+    categoryParentSelect.value = current;
+    renderChildCheckboxes();
   }
 
-  // 依目前輸入的主類別，重新整理子類別下拉選單：只列出「已經存在」且「尚未選取」的子類別，
-  // 完全沒有任何預設選項；如果沒有任何可選的子類別，下拉選單會停用，但仍可用「新增子類別」手動加入
-  function updateChildSelect(){
+  // 依目前選取的主類別，重新整理子類別勾選清單：只列出「已經存在」的子類別（完全沒有任何預設選項），
+  // 勾選狀態依 selectedSubCategories 而定；沒有任何可選的子類別時清單留空，仍可用「新增子類別」手動加入
+  function renderChildCheckboxes(){
     const tree = buildCategoryTree();
-    const parent = categoryParentInput.value.trim();
-    const existing = parent && tree.has(parent) ? Array.from(tree.get(parent)).sort() : [];
-    const available = existing.filter(c => !selectedSubCategories.includes(c));
-    categoryChildSelect.innerHTML = '<option value="">-- 選擇子類別 --</option>' +
-      available.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-    categoryChildSelect.disabled = available.length === 0;
-  }
-
-  function renderSelectedSubCategoryChips(){
-    categoryChildChips.innerHTML = selectedSubCategories.map(c => `
-      <span class="cat-chip">${escapeHtml(c)}<button type="button" class="cat-chip-x" data-sub="${escapeHtml(c)}" title="移除">✕</button></span>
-    `).join("");
+    const parent = categoryParentSelect.value.trim();
+    const existing = parent && tree.has(parent) ? Array.from(tree.get(parent)) : [];
+    // 保留目前已勾選但尚未存在於資料裡的子類別（例如剛手動新增、尚未送出表單）
+    const all = Array.from(new Set([...existing, ...selectedSubCategories])).sort();
+    categoryChildCheckboxes.innerHTML = all.map(c => {
+      const checked = selectedSubCategories.includes(c);
+      return `<label class="cat-checkbox-item${checked ? " checked" : ""}">
+        <input type="checkbox" value="${escapeHtml(c)}" ${checked ? "checked" : ""}>
+        ${escapeHtml(c)}
+      </label>`;
+    }).join("");
   }
 
   function addSelectedSubCategory(name){
     const c = String(name || "").trim();
     if(!c || selectedSubCategories.includes(c)) return;
     selectedSubCategories.push(c);
-    renderSelectedSubCategoryChips();
-    updateChildSelect();
+    renderChildCheckboxes();
+    updateLiveRank();
   }
 
   function removeSelectedSubCategory(name){
     selectedSubCategories = selectedSubCategories.filter(c => c !== name);
-    renderSelectedSubCategoryChips();
-    updateChildSelect();
+    renderChildCheckboxes();
+    updateLiveRank();
   }
 
-  categoryChildChips.addEventListener("click", (e) => {
-    const btn = e.target.closest(".cat-chip-x");
-    if(!btn) return;
-    removeSelectedSubCategory(btn.dataset.sub);
+  categoryChildCheckboxes.addEventListener("change", (e) => {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if(!cb) return;
+    if(cb.checked) addSelectedSubCategory(cb.value);
+    else removeSelectedSubCategory(cb.value);
   });
 
-  categoryParentInput.addEventListener("input", updateChildSelect);
+  categoryParentSelect.addEventListener("change", () => {
+    renderChildCheckboxes();
+    updateLiveRank();
+  });
 
-  categoryChildSelect.addEventListener("change", () => {
-    if(categoryChildSelect.value){
-      addSelectedSubCategory(categoryChildSelect.value);
+  categoryParentManualBtn.addEventListener("click", () => {
+    const showing = categoryParentManualRow.style.display !== "none";
+    categoryParentManualRow.style.display = showing ? "none" : "flex";
+    if(!showing) categoryParentManualInput.focus();
+  });
+
+  function addManualParentCategory(){
+    const name = categoryParentManualInput.value.trim();
+    if(!name) return;
+    if(!Array.from(categoryParentSelect.options).some(o => o.value === name)){
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      categoryParentSelect.appendChild(opt);
+    }
+    categoryParentSelect.value = name;
+    categoryParentManualInput.value = "";
+    categoryParentManualRow.style.display = "none";
+    renderChildCheckboxes();
+    updateLiveRank();
+  }
+
+  categoryParentManualAddBtn.addEventListener("click", addManualParentCategory);
+  categoryParentManualInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      e.preventDefault();
+      addManualParentCategory();
     }
   });
 
@@ -1150,12 +1224,14 @@
   });
 
   function resetCategorySelection(){
-    categoryParentInput.value = "";
+    categoryParentSelect.value = "";
     selectedSubCategories = [];
+    categoryParentManualRow.style.display = "none";
+    categoryParentManualInput.value = "";
     categoryChildManualRow.style.display = "none";
     categoryChildManualInput.value = "";
-    renderSelectedSubCategoryChips();
-    updateChildSelect();
+    renderChildCheckboxes();
+    updateLiveRank();
   }
 
   // ---------- 新增表單內的即時試算 ----------
@@ -1163,6 +1239,7 @@
   const itemPriceInput = $("itemPrice");
   const itemCountInput = $("itemCount");
   const calcStamp = $("calcStamp");
+  const liveRankPreview = $("liveRankPreview");
 
   function updateCalc(){
     const g = parseFloat(itemGramsInput.value);
@@ -1181,10 +1258,48 @@
       calcStamp.style.color = "var(--ink-soft)";
       calcStamp.style.borderColor = "var(--ink-soft)";
     }
+    updateLiveRank();
   }
   itemGramsInput.addEventListener("input", updateCalc);
   itemPriceInput.addEventListener("input", updateCalc);
   itemCountInput.addEventListener("input", updateCalc);
+
+  // 依目前輸入的克數／總價／數量／主類別／子類別，即時試算「如果現在把這筆存進去，
+  // 在所屬類別（主類別，以及每個已選子類別）中 CP 值大約會排第幾名」，還沒送出表單就能看到，
+  // 若是在編輯既有紀錄，會先把該筆自己從比較清單中排除，避免跟自己比較。
+  function updateLiveRank(){
+    const g = parseFloat(itemGramsInput.value);
+    const p = parseFloat(itemPriceInput.value);
+    const count = parseInt(itemCountInput.value, 10) || 1;
+    const category = categoryParentSelect.value.trim();
+
+    if(!(g > 0) || isNaN(p) || p < 0 || count < 1 || !category){
+      liveRankPreview.innerHTML = "";
+      liveRankPreview.classList.remove("show");
+      return;
+    }
+
+    const cp = p / (g * count);
+    const paths = selectedSubCategories.length
+      ? selectedSubCategories.map(s => joinCategoryPath(category, s))
+      : [category];
+
+    const categoryMap = buildCategoryMap();
+    const badges = paths.map(path => {
+      const group = (categoryMap.get(path) || []).filter(i => editingRow === null || i.row !== editingRow);
+      const cps = group.map(i => i.cp);
+      cps.push(cp);
+      cps.sort((a, b) => a - b);
+      const rank = cps.indexOf(cp) + 1;
+      const total = cps.length;
+      const { parent, child } = splitCategoryPath(path);
+      const label = child ? `${escapeHtml(parent)}▸${escapeHtml(child)}` : escapeHtml(parent);
+      return `<span class="rank-badge live" title="假設現在把這筆存進去，在這個類別中依 CP 值由低到高估算的名次">${label} 預估第${rank}名／${total}</span>`;
+    });
+
+    liveRankPreview.innerHTML = `<span class="live-rank-label">即時排名預覽：</span>` + badges.join("");
+    liveRankPreview.classList.add("show");
+  }
 
   // ---------- 購買地點（記憶與動態渲染） ----------
   const itemLocationSelect = $("itemLocation");
@@ -1653,7 +1768,7 @@
       return;
     }
     const name = $("itemName").value.trim();
-    const category = categoryParentInput.value.trim();
+    const category = categoryParentSelect.value.trim();
     const subCategory = selectedSubCategories.join(",");
     const grams = parseFloat($("itemGrams").value);
     const price = parseFloat($("itemPrice").value);
@@ -1662,7 +1777,7 @@
     const location = getLocationValue(itemLocationSelect, itemLocationCustom);
     if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
       formMsg.textContent = "請確認欄位都已正確填寫（主類別為必填，子類別可留空）";
-      categoryParentInput.reportValidity && categoryParentInput.reportValidity();
+      categoryParentSelect.reportValidity && categoryParentSelect.reportValidity();
       return;
     }
     if(itemLocationSelect.value === "自行輸入" && !location){
@@ -1721,11 +1836,10 @@
     $("itemName").value = item.name;
     // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」「健康的」，
     // 這樣編輯時可以直接看到、也可以直接修改子類別，儲存時會一併更新回試算表
-    renderCategoryDatalists();
-    categoryParentInput.value = item.category || "";
     selectedSubCategories = subCategoriesOf(item);
-    renderSelectedSubCategoryChips();
-    updateChildSelect();
+    renderCategoryDatalists();
+    categoryParentSelect.value = item.category || "";
+    renderChildCheckboxes();
     itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
