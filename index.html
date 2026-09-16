@@ -409,13 +409,9 @@
   .leaderboard-card .card-title{margin-bottom:8px; font-size:13px;}
   .leaderboard-strip{
     display:flex;
+    flex-wrap:wrap;
     gap:8px;
-    overflow-x:auto;
-    padding-bottom:4px;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:thin;
   }
-  .leaderboard-strip::-webkit-scrollbar{height:4px;}
   .leaderboard-chip{
     flex:none;
     display:flex;
@@ -2331,8 +2327,7 @@
       avg: arr.reduce((sum, i) => sum + i.cp, 0) / arr.length,
       count: arr.length
     }));
-// ===== 修改後（改成依筆數由多到少排，筆數多的排前面） =====
-    stats.sort((a, b) => b.count - a.count); // 筆數越多排越前面
+    stats.sort((a, b) => b.count - a.count); // 筆數多的排前面
     return stats;
   }
 
@@ -2387,7 +2382,6 @@
             <button type="button" class="leaderboard-chip${activeCat === s.cat ? " active" : ""}" data-cat="${escapeHtml(s.cat)}">
               <span class="lb-rank mono">${idx + 1}</span>
               <span class="lb-name">${escapeHtml(s.cat)}</span>
-              <span class="lb-count">${s.count}筆</span>
               <span class="lb-avg mono">${s.avg.toFixed(3)}</span>
             </button>
           `).join("")}
