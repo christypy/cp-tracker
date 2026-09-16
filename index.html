@@ -390,6 +390,104 @@
     flex:none;
   }
 
+  /* ---------- category leaderboard (主類別 CP值排行榜，不用點擊主類別排名就會顯示，點擊才展開子類別) ---------- */
+  #categoryLeaderboard{
+    max-width:880px;
+    width:calc(100% - 32px);
+    box-sizing:border-box;
+    margin:0 auto 18px;
+  }
+  #categoryLeaderboard:empty{display:none;}
+  .leaderboard-card{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 1px 0 var(--line), 0 6px 16px -12px rgba(43,40,32,.4);
+    padding:16px 16px 8px;
+  }
+  .leaderboard-card .card-title{margin-bottom:10px;}
+  .leaderboard-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .leaderboard-row-wrap{
+    border-bottom:1px dashed var(--line);
+  }
+  .leaderboard-row-wrap:last-child{border-bottom:none;}
+  .leaderboard-row{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:none;
+    border:none;
+    padding:8px 4px;
+    cursor:pointer;
+    text-align:left;
+    font-family:'Noto Sans TC', sans-serif;
+    color:var(--ink);
+  }
+  .leaderboard-row:active{opacity:.7;}
+  .lb-rank{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    font-weight:700;
+    color:var(--ink-soft);
+    min-width:18px;
+  }
+  .lb-rank.sub{color:var(--amber);}
+  .lb-name{
+    flex:1;
+    font-size:14px;
+    font-weight:500;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .lb-count{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    flex:none;
+  }
+  .lb-avg{
+    font-size:13px;
+    font-weight:700;
+    color:var(--green);
+    flex:none;
+    min-width:78px;
+    text-align:right;
+  }
+  .lb-caret{
+    font-size:11px;
+    color:var(--ink-soft);
+    flex:none;
+  }
+  .leaderboard-sub-list{
+    padding:0 4px 8px 30px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .leaderboard-sub-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:12px;
+    padding:4px 0;
+  }
+  .leaderboard-sub-empty{
+    padding:4px 4px 10px 30px;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  @media (max-width:560px){
+    .lb-name{font-size:13px;}
+    .lb-avg{min-width:64px; font-size:12px;}
+  }
+
   /* ---------- receipt table ---------- */
   .receipt{
     background:var(--white);
@@ -860,6 +958,8 @@
   <button id="refreshBtn" title="重新整理">↻</button>
 </div>
 
+<div id="categoryLeaderboard"></div>
+
 <main>
 
   <!-- 新增品項（先算再填資料） -->
@@ -1086,6 +1186,8 @@
   const formMsg = $("formMsg");
   const addBtn = $("addBtn");
   const categoryStatsBar = $("categoryStatsBar");
+  const categoryLeaderboard = $("categoryLeaderboard");
+  let expandedLeaderboardMain = new Set(); // 記錄排行榜中哪些主類別被點開顯示子類別
 
   scriptUrlInput.value = scriptUrl;
 
@@ -2209,6 +2311,98 @@
     categoryStatsBar.classList.add("show");
   }
 
+  // ---------- 主類別 CP值排行榜（不用點擊就能看主類別前十名平均，點擊某個主類別才展開子類別排名） ----------
+  // 主類別平均：跟 updateCategoryStatsBar 用同一種算法（只比對 item.category，不論有沒有子類別），
+  // 所以這裡顯示的平均跟點進該主類別篩選後看到的平均會一致。
+  function computeMainCategoryStats(){
+    const map = new Map();
+    items.forEach(i => {
+      if(i.pending || !i.category) return;
+      if(!map.has(i.category)) map.set(i.category, []);
+      map.get(i.category).push(i);
+    });
+    const stats = Array.from(map.entries()).map(([cat, arr]) => ({
+      cat,
+      avg: arr.reduce((sum, i) => sum + i.cp, 0) / arr.length,
+      count: arr.length
+    }));
+    stats.sort((a, b) => a.avg - b.avg); // CP 值越低越划算，由低到高排
+    return stats;
+  }
+
+  // 子類別平均：只看某個主類別底下的資料，依子類別彙整（有多個子類別的品項會分別算進每個子類別）
+  function computeSubCategoryStats(parentCat){
+    const map = new Map();
+    items.forEach(i => {
+      if(i.pending || i.category !== parentCat) return;
+      subCategoriesOf(i).forEach(sub => {
+        if(!map.has(sub)) map.set(sub, []);
+        map.get(sub).push(i);
+      });
+    });
+    const stats = Array.from(map.entries()).map(([sub, arr]) => ({
+      sub,
+      avg: arr.reduce((sum, i) => sum + i.cp, 0) / arr.length,
+      count: arr.length
+    }));
+    stats.sort((a, b) => a.avg - b.avg);
+    return stats;
+  }
+
+  function renderSubLeaderboard(parentCat){
+    const subStats = computeSubCategoryStats(parentCat).slice(0, 10);
+    if(subStats.length === 0){
+      return `<div class="leaderboard-sub-empty">這個主類別底下還沒有子類別資料</div>`;
+    }
+    return `<div class="leaderboard-sub-list">` + subStats.map((s, idx) => `
+      <div class="leaderboard-sub-row">
+        <span class="lb-rank sub mono">${idx + 1}</span>
+        <span class="lb-name">${escapeHtml(s.sub)}</span>
+        <span class="lb-count">${s.count}筆</span>
+        <span class="lb-avg mono">${s.avg.toFixed(3)} $/g</span>
+      </div>
+    `).join("") + `</div>`;
+  }
+
+  function renderCategoryLeaderboard(){
+    const stats = computeMainCategoryStats();
+    if(stats.length === 0){
+      categoryLeaderboard.innerHTML = "";
+      return;
+    }
+    const top = stats.slice(0, 10); // 不足10個主類別就取現有總數
+    categoryLeaderboard.innerHTML = `
+      <div class="leaderboard-card">
+        <p class="card-title">主類別 CP值排行榜（前 ${top.length} 名・點擊看子類別）</p>
+        <div class="leaderboard-list">
+          ${top.map((s, idx) => {
+            const expanded = expandedLeaderboardMain.has(s.cat);
+            return `
+              <div class="leaderboard-row-wrap">
+                <button type="button" class="leaderboard-row" data-cat="${escapeHtml(s.cat)}">
+                  <span class="lb-rank mono">${idx + 1}</span>
+                  <span class="lb-name">${escapeHtml(s.cat)}</span>
+                  <span class="lb-count">${s.count}筆</span>
+                  <span class="lb-avg mono">${s.avg.toFixed(3)} $/g</span>
+                  <span class="lb-caret">${expanded ? "▴" : "▾"}</span>
+                </button>
+                ${expanded ? renderSubLeaderboard(s.cat) : ""}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+    categoryLeaderboard.querySelectorAll(".leaderboard-row").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cat = btn.dataset.cat;
+        if(expandedLeaderboardMain.has(cat)) expandedLeaderboardMain.delete(cat);
+        else expandedLeaderboardMain.add(cat);
+        renderCategoryLeaderboard();
+      });
+    });
+  }
+
   // 搜尋框比對邏輯：同時比對品項名稱、主類別、子類別，只要其中一個包含關鍵字就算符合，
   // 這樣不只能搜品項名稱，也能直接輸入類別或子類別名稱來篩選（例如輸入「甜的」會列出所有「甜的」子類別的品項）
   function itemMatchesSearch(item, term){
@@ -2220,6 +2414,7 @@
 
   function renderTable(){
     updateCategoryStatsBar();
+    renderCategoryLeaderboard();
 
     let list = items.filter(i => {
       const matchCat = categoryMatches(i, activeCategory);
