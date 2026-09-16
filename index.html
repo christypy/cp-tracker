@@ -2331,7 +2331,8 @@
       avg: arr.reduce((sum, i) => sum + i.cp, 0) / arr.length,
       count: arr.length
     }));
-    stats.sort((a, b) => a.avg - b.avg); // CP 值越低越划算，由低到高排
+// ===== 修改後（改成依筆數由多到少排，筆數多的排前面） =====
+    stats.sort((a, b) => b.count - a.count); // 筆數越多排越前面
     return stats;
   }
 
