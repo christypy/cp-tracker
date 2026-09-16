@@ -405,68 +405,76 @@
     box-shadow:0 1px 0 var(--line), 0 6px 16px -12px rgba(43,40,32,.4);
     padding:16px 16px 8px;
   }
-  .leaderboard-card .card-title{margin-bottom:10px;}
-  .leaderboard-list{
+  .leaderboard-card{padding:12px 14px 10px;}
+  .leaderboard-card .card-title{margin-bottom:8px; font-size:13px;}
+  .leaderboard-strip{
     display:flex;
-    flex-direction:column;
-    gap:6px;
+    gap:8px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;
   }
-  .leaderboard-row-wrap{
-    border-bottom:1px dashed var(--line);
-  }
-  .leaderboard-row-wrap:last-child{border-bottom:none;}
-  .leaderboard-row{
-    width:100%;
+  .leaderboard-strip::-webkit-scrollbar{height:4px;}
+  .leaderboard-chip{
+    flex:none;
     display:flex;
     align-items:center;
-    gap:10px;
-    background:none;
-    border:none;
-    padding:8px 4px;
+    gap:6px;
+    background:var(--paper, #faf8f3);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 12px;
     cursor:pointer;
     text-align:left;
     font-family:'Noto Sans TC', sans-serif;
     color:var(--ink);
+    white-space:nowrap;
   }
-  .leaderboard-row:active{opacity:.7;}
+  .leaderboard-chip:active{opacity:.7;}
+  .leaderboard-chip.active{
+    background:var(--green);
+    border-color:var(--green);
+    color:#fff;
+  }
+  .leaderboard-chip.active .lb-rank,
+  .leaderboard-chip.active .lb-avg{color:#fff;}
   .lb-rank{
     font-family:'Space Mono', monospace;
-    font-size:12px;
+    font-size:11px;
     font-weight:700;
     color:var(--ink-soft);
-    min-width:18px;
   }
   .lb-rank.sub{color:var(--amber);}
   .lb-name{
-    flex:1;
-    font-size:14px;
+    font-size:13px;
     font-weight:500;
-    min-width:0;
-    overflow:hidden;
-    text-overflow:ellipsis;
     white-space:nowrap;
   }
   .lb-count{
     font-family:'Space Mono', monospace;
-    font-size:11px;
+    font-size:10px;
     color:var(--ink-soft);
     flex:none;
   }
+  .leaderboard-chip.active .lb-count{color:rgba(255,255,255,.85);}
   .lb-avg{
-    font-size:13px;
+    font-size:12px;
     font-weight:700;
     color:var(--green);
     flex:none;
-    min-width:78px;
-    text-align:right;
   }
-  .lb-caret{
+  .leaderboard-sub-panel{
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px dashed var(--line);
+  }
+  .leaderboard-sub-title{
     font-size:11px;
     color:var(--ink-soft);
-    flex:none;
+    margin-bottom:6px;
   }
   .leaderboard-sub-list{
-    padding:0 4px 8px 30px;
     display:flex;
     flex-direction:column;
     gap:4px;
@@ -476,16 +484,13 @@
     align-items:center;
     gap:10px;
     font-size:12px;
-    padding:4px 0;
+    padding:2px 0;
   }
+  .leaderboard-sub-row .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis;}
   .leaderboard-sub-empty{
-    padding:4px 4px 10px 30px;
+    padding-top:2px;
     font-size:12px;
     color:var(--ink-soft);
-  }
-  @media (max-width:560px){
-    .lb-name{font-size:13px;}
-    .lb-avg{min-width:64px; font-size:12px;}
   }
 
   /* ---------- receipt table ---------- */
@@ -1187,7 +1192,7 @@
   const addBtn = $("addBtn");
   const categoryStatsBar = $("categoryStatsBar");
   const categoryLeaderboard = $("categoryLeaderboard");
-  let expandedLeaderboardMain = new Set(); // 記錄排行榜中哪些主類別被點開顯示子類別
+  let expandedLeaderboardMain = null; // 記錄排行榜目前點開顯示子類別的主類別（一次只展開一個，維持一行式排行榜精簡）
 
   scriptUrlInput.value = scriptUrl;
 
@@ -2364,6 +2369,7 @@
     `).join("") + `</div>`;
   }
 
+  // 排行榜改成一行式：主類別排名以可橫向滑動的小標籤呈現，點擊某個標籤才在下方展開該類別的子類別排名
   function renderCategoryLeaderboard(){
     const stats = computeMainCategoryStats();
     if(stats.length === 0){
@@ -2371,33 +2377,32 @@
       return;
     }
     const top = stats.slice(0, 10); // 不足10個主類別就取現有總數
+    const activeCat = expandedLeaderboardMain;
     categoryLeaderboard.innerHTML = `
       <div class="leaderboard-card">
         <p class="card-title">主類別 CP值排行榜（前 ${top.length} 名・點擊看子類別）</p>
-        <div class="leaderboard-list">
-          ${top.map((s, idx) => {
-            const expanded = expandedLeaderboardMain.has(s.cat);
-            return `
-              <div class="leaderboard-row-wrap">
-                <button type="button" class="leaderboard-row" data-cat="${escapeHtml(s.cat)}">
-                  <span class="lb-rank mono">${idx + 1}</span>
-                  <span class="lb-name">${escapeHtml(s.cat)}</span>
-                  <span class="lb-count">${s.count}筆</span>
-                  <span class="lb-avg mono">${s.avg.toFixed(3)} $/g</span>
-                  <span class="lb-caret">${expanded ? "▴" : "▾"}</span>
-                </button>
-                ${expanded ? renderSubLeaderboard(s.cat) : ""}
-              </div>
-            `;
-          }).join("")}
+        <div class="leaderboard-strip">
+          ${top.map((s, idx) => `
+            <button type="button" class="leaderboard-chip${activeCat === s.cat ? " active" : ""}" data-cat="${escapeHtml(s.cat)}">
+              <span class="lb-rank mono">${idx + 1}</span>
+              <span class="lb-name">${escapeHtml(s.cat)}</span>
+              <span class="lb-count">${s.count}筆</span>
+              <span class="lb-avg mono">${s.avg.toFixed(3)}</span>
+            </button>
+          `).join("")}
         </div>
+        ${activeCat ? `
+          <div class="leaderboard-sub-panel">
+            <p class="leaderboard-sub-title">${escapeHtml(activeCat)} ▸ 子類別排名</p>
+            ${renderSubLeaderboard(activeCat)}
+          </div>
+        ` : ""}
       </div>
     `;
-    categoryLeaderboard.querySelectorAll(".leaderboard-row").forEach(btn => {
+    categoryLeaderboard.querySelectorAll(".leaderboard-chip").forEach(btn => {
       btn.addEventListener("click", () => {
         const cat = btn.dataset.cat;
-        if(expandedLeaderboardMain.has(cat)) expandedLeaderboardMain.delete(cat);
-        else expandedLeaderboardMain.add(cat);
+        expandedLeaderboardMain = (expandedLeaderboardMain === cat) ? null : cat;
         renderCategoryLeaderboard();
       });
     });
