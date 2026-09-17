@@ -806,6 +806,86 @@
     line-height:1.6;
   }
 
+  /* ---------- 管理購買地點 ---------- */
+  details#locationManager{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 18px;
+    margin-top:12px;
+  }
+  details#locationManager summary{
+    cursor:pointer;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:.06em;
+  }
+  .location-manager-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .location-manager-list:empty::after{
+    content:"目前還沒有任何購買地點，請在下方新增";
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .location-manager-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+  }
+  .location-manager-row .loc-name{
+    flex:1;
+    font-size:13px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .location-manager-row .loc-count{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    flex:none;
+  }
+  .location-manager-row .loc-actions{
+    display:flex;
+    gap:6px;
+    flex:none;
+  }
+  .location-manager-row .loc-actions button{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    padding:5px 10px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .location-manager-row .loc-actions button:hover{color:var(--ink); border-color:var(--ink);}
+  .location-manager-row .loc-actions button.danger:hover{color:var(--red); border-color:var(--red);}
+  .location-manager-row.editing{gap:8px;}
+  .location-manager-row.editing input{
+    flex:1;
+    font-family:'Noto Sans TC', sans-serif;
+    font-size:13px;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--white);
+  }
+  .location-manager-msg{
+    font-size:12px;
+    color:var(--ink-soft);
+    min-height:14px;
+  }
+
   footer{
     text-align:center;
     font-size:11px;
@@ -1025,6 +1105,19 @@
     </div>
   </details>
 
+  <details id="locationManager">
+    <summary>📍 管理購買地點</summary>
+    <div class="settings-body">
+      <p>新增、刪除、編輯購買地點。編輯名稱時，所有使用這個地點的既有紀錄會自動一併同步更新；刪除地點不會刪除紀錄本身，只會清空這些紀錄的購買地點欄位。</p>
+      <div id="locationManagerList" class="location-manager-list"></div>
+      <div class="cat-manual-row" style="margin-top:2px;">
+        <input type="text" id="newLocationInput" placeholder="輸入新地點名稱" autocomplete="off">
+        <button type="button" id="newLocationAddBtn">加入</button>
+      </div>
+      <div id="locationManagerMsg" class="location-manager-msg"></div>
+    </div>
+  </details>
+
 </main>
 
 <!-- 比價彈窗 Modal -->
@@ -1088,19 +1181,39 @@
 
   const LS_URL_KEY = "cp_tracker_script_url";
   const LS_CACHE_KEY = "cp_tracker_cache";
-  const LS_LOCATIONS_KEY = "cp_tracker_custom_locations";
+  const LS_LOCATIONS_KEY = "cp_tracker_custom_locations"; // 舊版：只存「預設之外」的自訂地點
+  const LS_LOCATIONS_FULL_KEY = "cp_tracker_locations_full"; // 新版：完整地點清單（含預設），支援新增／刪除／編輯
 
   // 預設同步網址
   const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4SLRn8eRvg9pP4rrptYfbgIt3W5en2vrrfyUJG2SxpenrZp4D07wuRKiZDbIoMDq7/exec";
 
-  // 預設預設選單地點
+  // 預設地點清單（第一次使用時的起點；之後使用者可以在「管理購買地點」自行新增／刪除／編輯，
+  // 編輯結果會完整存進 LS_LOCATIONS_FULL_KEY，不會再受這份預設清單影響）
   const DEFAULT_LOCATIONS = [
     "全聯線上", "全聯", "家樂福線上", "PChome", "MoMo", "蝦皮", 
     "LG生活", "花王特賣", "康是美", "寶雅", "寶雅線上", "屈臣氏"
   ];
 
   let scriptUrl = localStorage.getItem(LS_URL_KEY) || DEFAULT_SCRIPT_URL;
-  let customLocations = JSON.parse(localStorage.getItem(LS_LOCATIONS_KEY) || "[]");
+
+  // 可管理地點清單：優先讀新版完整清單；找不到的話，從舊版「自訂地點」資料遷移
+  // （預設地點 + 舊版存的自訂地點，合併成一份完整清單），遷移後立刻存回新版格式，
+  // 之後就不會再跟 DEFAULT_LOCATIONS 重新合併，刪除／改名才會真正生效。
+  let manageableLocations;
+  {
+    const storedFull = JSON.parse(localStorage.getItem(LS_LOCATIONS_FULL_KEY) || "null");
+    if(Array.isArray(storedFull)){
+      manageableLocations = storedFull;
+    } else {
+      const legacyCustom = JSON.parse(localStorage.getItem(LS_LOCATIONS_KEY) || "[]");
+      manageableLocations = Array.from(new Set([...DEFAULT_LOCATIONS, ...legacyCustom]));
+    }
+  }
+  function persistLocations(){
+    localStorage.setItem(LS_LOCATIONS_FULL_KEY, JSON.stringify(manageableLocations));
+  }
+  persistLocations();
+
   let items = [];
   let activeCategory = "__all__";
   let searchTerm = "";
@@ -1469,9 +1582,9 @@
   }
 
   function buildLocationOptions(selectEl, customEl){
-    // 收集所有出現過的地點（包含預設、使用者新增、歷史紀錄）
+    // 收集所有出現過的地點（包含可管理清單、歷史紀錄）
     const historyLocations = items.map(i => i.location).filter(Boolean);
-    const allLocations = Array.from(new Set([...DEFAULT_LOCATIONS, ...customLocations, ...historyLocations]));
+    const allLocations = Array.from(new Set([...manageableLocations, ...historyLocations]));
 
     const currentVal = getLocationValue(selectEl, customEl);
 
@@ -1495,13 +1608,14 @@
   function renderLocationOptions(){
     buildLocationOptions(itemLocationSelect, itemLocationCustom);
     buildLocationOptions(modalLocationSelect, modalLocationCustom);
+    renderLocationManager();
   }
 
   function saveCustomLocation(loc){
     if(!loc) return;
-    if(!DEFAULT_LOCATIONS.includes(loc) && !customLocations.includes(loc)){
-      customLocations.push(loc);
-      localStorage.setItem(LS_LOCATIONS_KEY, JSON.stringify(customLocations));
+    if(!manageableLocations.includes(loc)){
+      manageableLocations.push(loc);
+      persistLocations();
     }
   }
 
@@ -1518,6 +1632,207 @@
   }
   bindLocationToggle(itemLocationSelect, itemLocationCustom);
   bindLocationToggle(modalLocationSelect, modalLocationCustom);
+
+  // ---------- 管理購買地點（新增／刪除／編輯，編輯或刪除會同步既有紀錄） ----------
+  const locationManagerList = $("locationManagerList");
+  const newLocationInput = $("newLocationInput");
+  const newLocationAddBtn = $("newLocationAddBtn");
+  const locationManagerMsg = $("locationManagerMsg");
+
+  function countItemsByLocation(loc){
+    return items.filter(i => !i.pending && i.location === loc).length;
+  }
+
+  function allKnownLocations(){
+    const historyLocations = items.map(i => i.location).filter(Boolean);
+    return Array.from(new Set([...manageableLocations, ...historyLocations]));
+  }
+
+  function renderLocationManager(){
+    if(!locationManagerList) return;
+    const all = allKnownLocations().sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    if(all.length === 0){
+      locationManagerList.innerHTML = "";
+      return;
+    }
+    locationManagerList.innerHTML = all.map(loc => {
+      const count = countItemsByLocation(loc);
+      return `<div class="location-manager-row" data-loc="${escapeHtml(loc)}">
+        <span class="loc-name">${escapeHtml(loc)}</span>
+        <span class="loc-count">${count}筆</span>
+        <div class="loc-actions">
+          <button type="button" class="loc-edit-btn">編輯</button>
+          <button type="button" class="loc-delete-btn danger">刪除</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    locationManagerList.querySelectorAll(".loc-edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".location-manager-row");
+        startEditLocationRow(row, row.dataset.loc);
+      });
+    });
+    locationManagerList.querySelectorAll(".loc-delete-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".location-manager-row");
+        deleteLocation(row.dataset.loc);
+      });
+    });
+  }
+
+  function startEditLocationRow(row, oldName){
+    row.classList.add("editing");
+    row.innerHTML = `
+      <input type="text" class="loc-edit-input" value="${escapeHtml(oldName)}">
+      <div class="loc-actions">
+        <button type="button" class="loc-confirm-btn">儲存</button>
+        <button type="button" class="loc-cancel-btn">取消</button>
+      </div>
+    `;
+    const input = row.querySelector(".loc-edit-input");
+    input.focus();
+    input.select();
+    const confirmEdit = () => renameLocation(oldName, input.value.trim());
+    row.querySelector(".loc-confirm-btn").addEventListener("click", confirmEdit);
+    row.querySelector(".loc-cancel-btn").addEventListener("click", () => renderLocationManager());
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); confirmEdit(); }
+      if(e.key === "Escape"){ e.preventDefault(); renderLocationManager(); }
+    });
+  }
+
+  // 把地點改名或清空後，同步寫回試算表裡每一筆用到這個地點的既有紀錄
+  // （本地畫面已經先樂觀更新過，這裡只負責背景把每一筆的完整欄位送出更新）
+  async function syncLocationChangeToServer(affectedItems){
+    const real = affectedItems.filter(i => !i.pending && typeof i.row === "number");
+    let failCount = 0;
+    for(const item of real){
+      try{
+        const res = await fetch(scriptUrl, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},
+          body: JSON.stringify({
+            action: "update",
+            row: item.row,
+            name: item.name,
+            category: item.category,
+            subCategory: item.subCategory,
+            grams: item.grams,
+            price: item.price,
+            count: item.count,
+            unitPrice: item.unitPrice,
+            date: item.date,
+            location: item.location
+          })
+        });
+        const data = JSON.parse(await res.text());
+        if(data.status !== "ok") throw new Error(data.message || "更新失敗");
+      }catch(err){
+        failCount += 1;
+        item.uploadError = true;
+      }
+    }
+    renderTable();
+    if(failCount > 0){
+      locationManagerMsg.textContent = `同步完成，但有 ${failCount} 筆更新失敗，請按 ↻ 重新整理確認`;
+      setSyncState("error", "部分紀錄同步失敗，請按 ↻ 重新整理確認");
+    } else if(real.length > 0){
+      locationManagerMsg.textContent = `已同步 ${real.length} 筆既有紀錄`;
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+    }
+  }
+
+  function renameLocation(oldName, newName){
+    if(!newName){
+      locationManagerMsg.textContent = "地點名稱不能留空";
+      return;
+    }
+    if(newName === oldName){
+      renderLocationManager();
+      return;
+    }
+    const others = allKnownLocations().filter(l => l !== oldName);
+    if(others.includes(newName)){
+      locationManagerMsg.textContent = `地點「${newName}」已經存在，請改用其他名稱，或直接刪除「${oldName}」來合併`;
+      renderLocationManager();
+      return;
+    }
+
+    const idx = manageableLocations.indexOf(oldName);
+    if(idx !== -1) manageableLocations[idx] = newName;
+    else manageableLocations.push(newName);
+    persistLocations();
+
+    // 先在本地把所有用到舊地點名稱的既有紀錄改成新名稱，畫面立刻反映
+    const affected = items.filter(i => i.location === oldName);
+    affected.forEach(i => { i.location = newName; });
+
+    buildLocationOptions(itemLocationSelect, itemLocationCustom);
+    buildLocationOptions(modalLocationSelect, modalLocationCustom);
+    renderTable();
+    renderLocationManager();
+
+    if(affected.length > 0){
+      locationManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
+      setSyncState("syncing", "背景更新中…");
+      syncLocationChangeToServer(affected);
+    } else {
+      locationManagerMsg.textContent = "已更新地點名稱";
+    }
+  }
+
+  function deleteLocation(name){
+    const count = countItemsByLocation(name);
+    const msg = count > 0
+      ? `「${name}」目前有 ${count} 筆紀錄使用，刪除後這些紀錄的購買地點會被清空（不會刪除紀錄本身），確定要刪除嗎？`
+      : `確定要刪除地點「${name}」嗎？`;
+    if(!confirm(msg)) return;
+
+    manageableLocations = manageableLocations.filter(l => l !== name);
+    persistLocations();
+
+    const affected = items.filter(i => i.location === name);
+    affected.forEach(i => { i.location = ""; });
+
+    buildLocationOptions(itemLocationSelect, itemLocationCustom);
+    buildLocationOptions(modalLocationSelect, modalLocationCustom);
+    renderTable();
+    renderLocationManager();
+
+    if(affected.length > 0){
+      locationManagerMsg.textContent = `已刪除，正在同步清空 ${affected.length} 筆既有紀錄的地點…`;
+      setSyncState("syncing", "背景更新中…");
+      syncLocationChangeToServer(affected);
+    } else {
+      locationManagerMsg.textContent = "已刪除地點";
+    }
+  }
+
+  if(newLocationAddBtn){
+    newLocationAddBtn.addEventListener("click", () => {
+      const name = newLocationInput.value.trim();
+      if(!name){
+        locationManagerMsg.textContent = "請輸入地點名稱";
+        return;
+      }
+      if(allKnownLocations().includes(name)){
+        locationManagerMsg.textContent = `地點「${name}」已經存在`;
+        return;
+      }
+      manageableLocations.push(name);
+      persistLocations();
+      newLocationInput.value = "";
+      locationManagerMsg.textContent = `已新增地點「${name}」`;
+      renderLocationOptions();
+    });
+    newLocationInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        newLocationAddBtn.click();
+      }
+    });
+  }
 
   // ---------- 快速比價 Modal 邏輯 ----------
   const compareModal = $("compareModal");
