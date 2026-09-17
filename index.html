@@ -481,9 +481,9 @@
   .receipt-row{
     display:grid;
     grid-template-columns:1.8fr .8fr .8fr .6fr .8fr .9fr .8fr;
-    gap:6px;
+    gap:8px;
     align-items:center;
-    padding:12px 14px;
+    padding:14px 16px;
     border-bottom:1px dashed var(--line);
   }
   .receipt-row:last-child{border-bottom:none;}
@@ -500,7 +500,13 @@
     font-weight:500;
     display:flex;
     flex-direction:column;
-    gap:2px;
+    gap:4px;
+    line-height:1.5;
+  }
+  .receipt-row .item-name-text{
+    font-size:16px;
+    font-weight:700;
+    color:var(--ink);
   }
   .receipt-row .name-clickable{
     cursor:pointer;
@@ -524,13 +530,13 @@
   }
   .receipt-row .name .cat-badge{
     font-family:'Space Mono', monospace;
-    font-size:10px;
+    font-size:11px;
     color:var(--ink-soft);
     width:fit-content;
   }
   .receipt-row .name .date-badge{
     font-family:'Space Mono', monospace;
-    font-size:10px;
+    font-size:11px;
     color:var(--ink-soft);
     width:fit-content;
   }
@@ -615,6 +621,40 @@
     font-size:14px;
   }
 
+  /* ---------- 分頁按鈕（左右切換頁面，取代原本的顯示更多） ---------- */
+  .list-pager{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:12px 14px;
+    background:var(--paper-2);
+    border-top:1px solid var(--line);
+  }
+  .pager-btn{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    padding:8px 14px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink);
+    cursor:pointer;
+    white-space:nowrap;
+    flex:none;
+  }
+  .pager-btn:hover:not(:disabled){border-color:var(--ink);}
+  .pager-btn:disabled{opacity:.35; cursor:not-allowed;}
+  .pager-status{
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:center;
+    flex:1;
+  }
+  @media (max-width:480px){
+    .pager-btn{padding:8px 10px; font-size:11px;}
+  }
+
   /* ---------- grouped by product name (different sizes together) ---------- */
   .group-block + .group-block{
     border-top:6px solid var(--paper-2);
@@ -638,9 +678,9 @@
   .receipt-row.tier-gray{border-left:4px solid var(--line);}
   .tier-tag{
     font-family:'Space Mono', monospace;
-    font-size:10px;
+    font-size:11px;
     font-weight:700;
-    padding:1px 8px 1px 6px;
+    padding:3px 10px 3px 7px;
     border-radius:999px;
     white-space:nowrap;
     display:inline-flex;
@@ -837,6 +877,15 @@
     flex:none;
   }
   .app-modal-close:hover{color:var(--ink); border-color:var(--ink);}
+  @media (max-width:560px){
+    .app-modal-backdrop{padding:0;}
+    .app-modal-box{
+      max-width:100%;
+      min-height:100%;
+      border-radius:0;
+      padding:16px 14px 20px;
+    }
+  }
 
   /* ---------- 懸浮按鈕：查看產品列表 ---------- */
   #viewListFab{
@@ -1039,56 +1088,77 @@
       display:flex;
       flex-wrap:wrap;
       align-items:center;
-      gap:8px 10px;
-      font-size:12px;
-      padding:14px;
+      gap:10px 12px;
+      font-size:13px;
+      padding:16px 14px;
     }
     .receipt-row .name{
       flex:0 0 100%;
+      gap:5px;
+    }
+    .receipt-row .item-name-text{
+      font-size:18px;
+      font-weight:700;
+      line-height:1.4;
+    }
+    .receipt-row .tier-tag{
+      font-size:12px;
+      padding:4px 11px 4px 8px;
+    }
+    .receipt-row .name .cat-badge,
+    .receipt-row .name .date-badge{
+      font-size:12px;
     }
     .receipt-row .stats{
       display:flex;
       flex-wrap:wrap;
       flex:0 0 100%;
-      gap:6px 16px;
+      gap:8px 18px;
     }
     .receipt-row .stat{
       display:flex;
       align-items:baseline;
-      gap:4px;
+      gap:5px;
       text-align:left;
     }
     .receipt-row .stat-label{
       display:inline;
-      font-size:10px;
+      font-size:11px;
       letter-spacing:.04em;
       color:var(--ink-soft);
     }
     .receipt-row .stat-val{
       font-weight:700;
-      font-size:13px;
+      font-size:14px;
     }
     .receipt-row .cp-cell{
       flex:1 1 auto;
       justify-content:flex-start;
-      gap:8px;
-      padding-top:8px;
+      gap:9px;
+      padding-top:10px;
       border-top:1px dashed var(--line);
     }
     .receipt-row .cp-cell .stat-label{
       display:inline;
       margin-right:0;
+      font-size:12px;
     }
     .receipt-row .cp-val{
-      font-size:15px;
+      font-size:17px;
     }
     .receipt-row .row-actions,
     .receipt-row .pending-label,
     .receipt-row > .del{
       flex:0 0 auto;
       margin-left:auto;
-      padding-top:8px;
+      padding-top:10px;
       border-top:1px dashed var(--line);
+    }
+    /* 編輯／刪除按鈕在手機上加大點擊範圍，比較好按 */
+    .receipt-row .edit,
+    .receipt-row .del{
+      font-size:18px;
+      padding:6px 8px;
     }
 
     form#addForm{grid-template-columns:1fr 1fr 1fr;}
@@ -1404,9 +1474,9 @@
   let searchTerm = "";
   let sortAsc = true;
   let expandedGroups = new Set();
-  // 「全部」檢視預設只顯示最近更新的一小段；點「顯示更多」每次只多展開一批，
-  // 避免一次全部展開後要一路無限往下滑才找得到東西（改成分批載入＋可收合）
-  let visibleBatches = 1;
+  // 清單分頁：每頁只顯示少量筆數（依裝置螢幕寬度調整），用左右按鈕切換頁面，
+  // 取代原本「顯示更多」的無限往下展開，滑動範圍固定、好操作。
+  let currentPage = 0;
 
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
@@ -1914,7 +1984,7 @@
             price: item.price,
             count: item.count,
             unitPrice: item.unitPrice,
-            date: item.date,
+            date: formatDateOnly(item.date),
             location: item.location
           })
         });
@@ -2259,7 +2329,7 @@
             price: item.price,
             count: item.count,
             unitPrice: item.unitPrice,
-            date: item.date,
+            date: formatDateOnly(item.date),
             location: item.location
           })
         });
@@ -2953,7 +3023,9 @@
     selectedParentCategory = item.category || "";
     renderFormCategoryLeaderboard();
     renderChildCheckboxes();
-    itemDateInput.value = item.date || new Date().toISOString().slice(0, 10);
+    // input[type=date] 只吃 YYYY-MM-DD，若舊資料的「日期」欄位帶了時間（例如試算表把它存成日期時間格式），
+    // 這裡統一截掉時間部分，不然日期欄位會顯示空白
+    itemDateInput.value = formatDateOnly(item.date) || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, item.location || "");
     updateCalc();
     formTitle.textContent = "編輯品項";
@@ -3106,14 +3178,14 @@
     allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
     allChip.textContent = "全部";
     allChip.dataset.cat = "__all__";
-    allChip.addEventListener("click", () => { activeCategory = "__all__"; visibleBatches = 1; renderCategoryChips(); renderTable(); });
+    allChip.addEventListener("click", () => { activeCategory = "__all__"; currentPage = 0; renderCategoryChips(); renderTable(); });
     categoryChips.appendChild(allChip);
     parents.forEach(p => {
       const chip = document.createElement("button");
       chip.className = "chip" + (activeParent === p ? " active" : "");
       chip.textContent = p;
       chip.dataset.cat = p;
-      chip.addEventListener("click", () => { activeCategory = p; renderCategoryChips(); renderTable(); });
+      chip.addEventListener("click", () => { activeCategory = p; currentPage = 0; renderCategoryChips(); renderTable(); });
       categoryChips.appendChild(chip);
     });
 
@@ -3129,6 +3201,7 @@
         chip.dataset.cat = fullPath;
         chip.addEventListener("click", () => {
           activeCategory = (activeCategory === fullPath) ? activeParent : fullPath;
+          currentPage = 0;
           renderCategoryChips();
           renderTable();
         });
@@ -3139,6 +3212,7 @@
 
   $("searchInput").addEventListener("input", (e) => {
     searchTerm = e.target.value.trim().toLowerCase();
+    currentPage = 0;
     renderTable();
   });
 
@@ -3146,6 +3220,7 @@
   sortToggleBtn.addEventListener("click", () => {
     sortAsc = !sortAsc;
     sortToggleBtn.textContent = sortAsc ? "CP值 低→高 ↑" : "CP值 高→低 ↓";
+    currentPage = 0;
     renderTable();
   });
 
@@ -3307,22 +3382,19 @@
       groups.sort((a, b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
     }
 
-    // 「全部」檢視預設只顯示最近更新的一小段，避免一次把所有紀錄都攤開；
-    // 點「顯示更多」每次只多載入一批（分頁式），不是一次全部展開，
-    // 這樣才不會展開後要無限往下滑才找得到東西，也隨時可以按「收合」回到最上面。
-    // 只要有在搜尋，就不再截斷；切某個主類別/子類別篩選時不受影響，一律顯示完整結果。
-    const ALL_VIEW_RECENT_LIMIT = 8;
-    let hiddenCount = 0;
-    let groupsToRender = groups;
-    let isExpandedView = false;
-    if(activeCategory === "__all__" && !searchTerm && groups.length > ALL_VIEW_RECENT_LIMIT){
-      const visibleLimit = ALL_VIEW_RECENT_LIMIT * visibleBatches;
-      if(groups.length > visibleLimit){
-        groupsToRender = groups.slice(0, visibleLimit);
-        hiddenCount = groups.length - visibleLimit;
-      }
-      isExpandedView = visibleBatches > 1;
+    // 清單分頁：依裝置螢幕寬度決定每頁筆數（手機螀幕較窄，一頁只放 5 筆以內；
+    // 平板／桌機畫面比較寬，可以放多一點），用左右按鈕切換頁面，不用一路往下滑。
+    function getPageSize(){
+      const w = window.innerWidth;
+      if(w <= 560) return 5;
+      if(w <= 900) return 8;
+      return 10;
     }
+    const pageSize = getPageSize();
+    const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
+    if(currentPage >= totalPages) currentPage = totalPages - 1;
+    if(currentPage < 0) currentPage = 0;
+    const groupsToRender = groups.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
 
     function renderRow(item, opts){
       const { isRep, multi, isBestOfGroup, sub } = opts;
@@ -3346,7 +3418,7 @@
         ? `<span class="best-badge" title="換算成單一件（1入）在同樣克數/毫升下的價格">・換算1入：$${formatNum(item.unitPrice)}／${formatNum(item.grams)}g</span>`
         : "";
       const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "") + ` tier-${tier}`;
-      const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
+      const dateBadge = item.date ? `<span class="date-badge">📅 ${escapeHtml(formatDateOnly(item.date))}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
       const itemSubs = subCategoriesOf(item);
       const catBadges = item.category
@@ -3363,7 +3435,7 @@
       return `
         <div class="${rowClass}">
           <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${tierTag}
+            <span class="item-name-text">${escapeHtml(item.name)}</span> ${bestBadge}${convertedBadge}${tierTag}
             <span class="cat-badge-group">${catBadges}</span>
             ${dateBadge}
             ${locationBadge}
@@ -3407,9 +3479,17 @@
       }
 
       return `<div class="group-block">${groupHeader}${repRow}${othersHtml}</div>`;
-    }).join("")
-      + (hiddenCount > 0 ? `<button type="button" id="showAllRecentBtn" class="sub-toggle">▾ 顯示更多（還有 ${hiddenCount} 筆未顯示，每次多顯示 ${ALL_VIEW_RECENT_LIMIT} 筆）</button>` : "")
-      + (isExpandedView ? `<button type="button" id="collapseRecentBtn" class="sub-toggle">▴ 收合，回到最上面</button>` : "");
+    }).join("");
+
+    const pagerHtml = totalPages > 1 ? `
+      <div class="list-pager">
+        <button type="button" id="pagerPrevBtn" class="pager-btn" ${currentPage === 0 ? "disabled" : ""}>◀ 上一頁</button>
+        <span class="pager-status mono">第 ${currentPage + 1} / ${totalPages} 頁・共 ${groups.length} 筆</span>
+        <button type="button" id="pagerNextBtn" class="pager-btn" ${currentPage >= totalPages - 1 ? "disabled" : ""}>下一頁 ▶</button>
+      </div>
+    ` : "";
+
+    tableBody.innerHTML += pagerHtml;
 
     tableBody.querySelectorAll(".del").forEach(btn => {
       btn.addEventListener("click", () => deleteItem(btn.dataset.row));
@@ -3434,22 +3514,39 @@
         renderTable();
       });
     });
-    const showAllRecentBtn = $("showAllRecentBtn");
-    if(showAllRecentBtn){
-      showAllRecentBtn.addEventListener("click", () => {
-        // 每次只多展開一批，而不是整批全展開，避免展開後要無限往下滑
-        visibleBatches += 1;
-        renderTable();
+    const pagerPrevBtn = $("pagerPrevBtn");
+    const pagerNextBtn = $("pagerNextBtn");
+    if(pagerPrevBtn){
+      pagerPrevBtn.addEventListener("click", () => {
+        if(currentPage > 0){
+          currentPage -= 1;
+          renderTable();
+          tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       });
     }
-    const collapseRecentBtn = $("collapseRecentBtn");
-    if(collapseRecentBtn){
-      collapseRecentBtn.addEventListener("click", () => {
-        visibleBatches = 1;
-        renderTable();
-        tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
+    if(pagerNextBtn){
+      pagerNextBtn.addEventListener("click", () => {
+        if(currentPage < totalPages - 1){
+          currentPage += 1;
+          renderTable();
+          tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       });
     }
+  }
+
+  // 只取「日期」欄位的日期部分，不顯示時間：
+  // 一般情況下這欄本來就只是 YYYY-MM-DD；但如果 Google 試算表把這欄格式化成「日期」型態的儲存格，
+  // 讀回來的值可能會變成完整的日期時間字串（例如 2024-01-15T00:00:00.000Z），這裡統一截掉時間部分。
+  function formatDateOnly(str){
+    if(!str) return "";
+    const s = String(str).trim();
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m) return m[1];
+    const d = new Date(s);
+    if(!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return s;
   }
 
   function formatNum(n){
@@ -3473,6 +3570,16 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   }
+
+  // 視窗大小改變（例如手機轉橫向）時，重新計算每頁筆數；只在產品列表視窗開啟時才需要重繪
+  let resizeRenderTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeRenderTimer);
+    resizeRenderTimer = setTimeout(() => {
+      const listModalEl = $("listModal");
+      if(listModalEl && listModalEl.classList.contains("show")) renderTable();
+    }, 200);
+  });
 
   // ---------- 啟動 ----------
   renderLocationOptions();

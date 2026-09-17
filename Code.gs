@@ -59,7 +59,16 @@ function doGet(e) {
     values.forEach((row, i) => {
       if (!row[0]) return; // 跳過空白列
       const obj = {};
-      headers.forEach((h, idx) => { obj[h] = row[idx]; });
+      headers.forEach((h, idx) => {
+        let val = row[idx];
+        // 「日期」欄位如果被試算表存成日期格式，讀出來會是 Date 物件，
+        // 直接塞進 JSON 會被轉成完整的日期時間字串（帶時區），這裡統一只留日期部分，
+        // 並用試算表的時區換算，避免因為時區問題差了一天。
+        if (h === '日期' && val instanceof Date) {
+          val = Utilities.formatDate(val, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+        }
+        obj[h] = val;
+      });
       obj._row = i + 2; // 對應到試算表的實際列號（用於刪除／編輯）
       items.push(obj);
     });
