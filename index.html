@@ -2451,7 +2451,14 @@
     }
     if(!confirm(msg)) return;
 
-    affected.forEach(i => { i.category = targetParent; i.updatedAt = Date.now(); });
+    affected.forEach(i => {
+      i.category = targetParent;
+      // 搬走的這個子類別已經變成新的主類別本身，不用再留著同名的子類別標籤
+      // （否則會變成「主類別底下又掛著跟自己同名／原主類別其他子類別」的奇怪結構）；
+      // 該筆紀錄原本掛的「其他」子類別則維持不動，跟著整筆一起搬過去。
+      i.subCategory = subCategoriesOf(i).filter(s => s !== sub).join(",");
+      i.updatedAt = Date.now();
+    });
 
     if(activeCategory === joinCategoryPath(parent, sub)) activeCategory = joinCategoryPath(targetParent, sub);
 
