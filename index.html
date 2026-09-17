@@ -231,6 +231,27 @@
     text-align:center;
   }
 
+  /* ---------- 回到最上面（列表展開很多筆之後，不用無限往上滑） ---------- */
+  #backToTopBtn{
+    display:none;
+    position:fixed;
+    right:16px;
+    bottom:18px;
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--ink);
+    color:var(--paper);
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    box-shadow:0 6px 18px -6px rgba(43,40,32,.5);
+    z-index:480;
+  }
+  #backToTopBtn.show{display:block;}
+  #backToTopBtn:hover{opacity:.9;}
+
   /* ---------- fixed editing panel (編輯時固定在畫面下方，不用往上滑) ---------- */
   #editBackdrop{
     display:none;
@@ -610,6 +631,29 @@
   .receipt-row.grouped{
     border-left:3px solid var(--line);
   }
+  /* ---------- 紅黃綠燈：一眼看出這筆划不划算，不用逐一看排名數字 ---------- */
+  .receipt-row.tier-green{border-left:4px solid var(--green);}
+  .receipt-row.tier-amber{border-left:4px solid var(--amber);}
+  .receipt-row.tier-red{border-left:4px solid var(--red);}
+  .receipt-row.tier-gray{border-left:4px solid var(--line);}
+  .tier-tag{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    font-weight:700;
+    padding:1px 8px 1px 6px;
+    border-radius:999px;
+    white-space:nowrap;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    margin-left:2px;
+    margin-top:2px;
+  }
+  .tier-tag .dot{width:7px;height:7px;}
+  .tier-tag.tier-green{color:var(--green); background:rgba(84,140,84,.12);}
+  .tier-tag.tier-amber{color:var(--amber); background:rgba(182,134,44,.12);}
+  .tier-tag.tier-red{color:var(--red); background:rgba(176,68,58,.12);}
+  .tier-tag.tier-gray{color:var(--ink-soft); background:var(--paper-2);}
   .best-badge{
     font-family:'Space Mono', monospace;
     font-size:10px;
@@ -1031,6 +1075,8 @@
 
 <div id="editBackdrop"></div>
 
+<button type="button" id="backToTopBtn" title="回到最上面">▲</button>
+
 <header>
   <div class="eyebrow">$ / g Ledger</div>
   <h1>CP值帳本</h1>
@@ -1181,7 +1227,7 @@
   <details id="locationManager">
     <summary>📍 管理購買地點</summary>
     <div class="settings-body">
-      <p>新增、刪除、編輯購買地點。編輯名稱時，所有使用這個地點的既有紀錄會自動一併同步更新；刪除地點不會刪除紀錄本身，只會清空這些紀錄的購買地點欄位。</p>
+      <p>新增、刪除、編輯購買地點。編輯名稱時，所有使用這個地點的既有紀錄會自動一併同步更新；如果把名稱改成跟另一個既有地點一樣，會直接把兩個地點合併成一個。刪除地點不會刪除紀錄本身，只會清空這些紀錄的購買地點欄位。</p>
       <div id="locationManagerList" class="location-manager-list"></div>
       <div class="cat-manual-row" style="margin-top:2px;">
         <input type="text" id="newLocationInput" placeholder="輸入新地點名稱" autocomplete="off">
@@ -1303,8 +1349,9 @@
   let searchTerm = "";
   let sortAsc = true;
   let expandedGroups = new Set();
-  // 「全部」檢視預設只顯示最近更新的一小段，點了「顯示全部」之後才在本次瀏覽期間保持展開
-  let showAllRecent = false;
+  // 「全部」檢視預設只顯示最近更新的一小段；點「顯示更多」每次只多展開一批，
+  // 避免一次全部展開後要一路無限往下滑才找得到東西（改成分批載入＋可收合）
+  let visibleBatches = 1;
 
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
@@ -1839,15 +1886,29 @@
       return;
     }
     const others = allKnownLocations().filter(l => l !== oldName);
-    if(others.includes(newName)){
-      locationManagerMsg.textContent = `地點「${newName}」已經存在，請改用其他名稱，或直接刪除「${oldName}」來合併`;
-      renderLocationManager();
-      return;
+    // 輸入的名稱剛好跟另一個既有地點一樣 → 直接合併成同一個地點，不用先手動刪除舊的
+    const isMerge = others.includes(newName);
+    if(isMerge){
+      const mergeCount = countItemsByLocation(oldName);
+      const confirmMsg = mergeCount > 0
+        ? `地點「${newName}」已經存在。是否要把「${oldName}」合併進「${newName}」？「${oldName}」底下 ${mergeCount} 筆紀錄的購買地點都會改成「${newName}」，「${oldName}」這個地點名稱本身會被移除。`
+        : `地點「${newName}」已經存在。是否要把「${oldName}」合併進「${newName}」？（「${oldName}」目前沒有紀錄使用，合併後這個地點名稱會被移除）`;
+      if(!confirm(confirmMsg)){
+        renderLocationManager();
+        return;
+      }
     }
 
-    const idx = manageableLocations.indexOf(oldName);
-    if(idx !== -1) manageableLocations[idx] = newName;
-    else manageableLocations.push(newName);
+    // 合併時：把舊名稱從可管理清單移除（併入新名稱，不再保留兩個一樣的地點）
+    // 一般改名時：原地把名稱換成新名稱
+    if(isMerge){
+      manageableLocations = manageableLocations.filter(l => l !== oldName);
+      if(!manageableLocations.includes(newName)) manageableLocations.push(newName);
+    } else {
+      const idx = manageableLocations.indexOf(oldName);
+      if(idx !== -1) manageableLocations[idx] = newName;
+      else manageableLocations.push(newName);
+    }
     persistLocations();
 
     // 先在本地把所有用到舊地點名稱的既有紀錄改成新名稱，畫面立刻反映
@@ -1860,11 +1921,13 @@
     renderLocationManager();
 
     if(affected.length > 0){
-      locationManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
+      locationManagerMsg.textContent = isMerge
+        ? `已合併「${oldName}」到「${newName}」，正在同步 ${affected.length} 筆既有紀錄…`
+        : `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
       setSyncState("syncing", "背景更新中…");
       syncLocationChangeToServer(affected);
     } else {
-      locationManagerMsg.textContent = "已更新地點名稱";
+      locationManagerMsg.textContent = isMerge ? `已合併「${oldName}」到「${newName}」` : "已更新地點名稱";
     }
   }
 
@@ -2945,7 +3008,7 @@
     allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
     allChip.textContent = "全部";
     allChip.dataset.cat = "__all__";
-    allChip.addEventListener("click", () => { activeCategory = "__all__"; showAllRecent = false; renderCategoryChips(); renderTable(); });
+    allChip.addEventListener("click", () => { activeCategory = "__all__"; visibleBatches = 1; renderCategoryChips(); renderTable(); });
     categoryChips.appendChild(allChip);
     parents.forEach(p => {
       const chip = document.createElement("button");
@@ -3151,13 +3214,20 @@
     }
 
     // 「全部」檢視預設只顯示最近更新的一小段，避免一次把所有紀錄都攤開；
-    // 只要有在搜尋，或已經按過「顯示更多」，就不再截斷。切某個主類別/子類別篩選時不受影響，一律顯示完整結果。
+    // 點「顯示更多」每次只多載入一批（分頁式），不是一次全部展開，
+    // 這樣才不會展開後要無限往下滑才找得到東西，也隨時可以按「收合」回到最上面。
+    // 只要有在搜尋，就不再截斷；切某個主類別/子類別篩選時不受影響，一律顯示完整結果。
     const ALL_VIEW_RECENT_LIMIT = 8;
     let hiddenCount = 0;
     let groupsToRender = groups;
-    if(activeCategory === "__all__" && !searchTerm && !showAllRecent && groups.length > ALL_VIEW_RECENT_LIMIT){
-      groupsToRender = groups.slice(0, ALL_VIEW_RECENT_LIMIT);
-      hiddenCount = groups.length - ALL_VIEW_RECENT_LIMIT;
+    let isExpandedView = false;
+    if(activeCategory === "__all__" && !searchTerm && groups.length > ALL_VIEW_RECENT_LIMIT){
+      const visibleLimit = ALL_VIEW_RECENT_LIMIT * visibleBatches;
+      if(groups.length > visibleLimit){
+        groupsToRender = groups.slice(0, visibleLimit);
+        hiddenCount = groups.length - visibleLimit;
+      }
+      isExpandedView = visibleBatches > 1;
     }
 
     function renderRow(item, opts){
@@ -3183,11 +3253,16 @@
         const label = child ? `${escapeHtml(parent)}▸${escapeHtml(child)}` : escapeHtml(parent);
         return `<span class="rank-badge" title="在「${label}」類別中依 CP 值由低到高排名，數字越小越划算">${label} 第${r.rank}名／${r.total}</span>`;
       }).join("");
+      // 紅黃綠燈：跟排名數字互補，不用細看名次就能一眼判斷划不划算
+      const TIER_LABELS = { green:"划算", amber:"普通", red:"偏貴" };
+      const tierTag = (TIER_LABELS[tier] && !item.pending)
+        ? `<span class="tier-tag tier-${tier}" title="跟同類別/同品項中最划算的比較：綠色划算、黃色普通、紅色偏貴"><span class="dot ${tier}"></span>${TIER_LABELS[tier]}</span>`
+        : "";
       const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
       const convertedBadge = (isRep && multi && (item.count || 1) > 1)
         ? `<span class="best-badge" title="換算成單一件（1入）在同樣克數/毫升下的價格">・換算1入：$${formatNum(item.unitPrice)}／${formatNum(item.grams)}g</span>`
         : "";
-      const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "");
+      const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "") + ` tier-${tier}`;
       const dateBadge = item.date ? `<span class="date-badge">${escapeHtml(item.date)}</span>` : "";
       const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
       const itemSubs = subCategoriesOf(item);
@@ -3205,7 +3280,7 @@
       return `
         <div class="${rowClass}">
           <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${rankBadge}
+            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${tierTag}${rankBadge}
             <span class="cat-badge-group">${catBadges}</span>
             ${dateBadge}
             ${locationBadge}
@@ -3249,9 +3324,9 @@
       }
 
       return `<div class="group-block">${groupHeader}${repRow}${othersHtml}</div>`;
-    }).join("") + (hiddenCount > 0
-      ? `<button type="button" id="showAllRecentBtn" class="sub-toggle">▾ 顯示全部紀錄（還有 ${hiddenCount} 筆未顯示）</button>`
-      : "");
+    }).join("")
+      + (hiddenCount > 0 ? `<button type="button" id="showAllRecentBtn" class="sub-toggle">▾ 顯示更多（還有 ${hiddenCount} 筆未顯示，每次多顯示 ${ALL_VIEW_RECENT_LIMIT} 筆）</button>` : "")
+      + (isExpandedView ? `<button type="button" id="collapseRecentBtn" class="sub-toggle">▴ 收合，回到最上面</button>` : "");
 
     tableBody.querySelectorAll(".del").forEach(btn => {
       btn.addEventListener("click", () => deleteItem(btn.dataset.row));
@@ -3279,8 +3354,17 @@
     const showAllRecentBtn = $("showAllRecentBtn");
     if(showAllRecentBtn){
       showAllRecentBtn.addEventListener("click", () => {
-        showAllRecent = true;
+        // 每次只多展開一批，而不是整批全展開，避免展開後要無限往下滑
+        visibleBatches += 1;
         renderTable();
+      });
+    }
+    const collapseRecentBtn = $("collapseRecentBtn");
+    if(collapseRecentBtn){
+      collapseRecentBtn.addEventListener("click", () => {
+        visibleBatches = 1;
+        renderTable();
+        tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
   }
@@ -3294,6 +3378,17 @@
     return String(str).replace(/[&<>"']/g, (c) => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
     }[c]));
+  }
+
+  // ---------- 回到最上面按鈕（列表展開很多筆之後，不用一路往上滑） ----------
+  const backToTopBtn = $("backToTopBtn");
+  if(backToTopBtn){
+    window.addEventListener("scroll", () => {
+      backToTopBtn.classList.toggle("show", window.scrollY > 500);
+    }, { passive: true });
+    backToTopBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   }
 
   // ---------- 啟動 ----------
