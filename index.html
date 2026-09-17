@@ -3002,13 +3002,17 @@
     return map;
   }
 
+  // 分級改成「跟同類別裡最划算的比，貴了幾 %」，而不是硬切名次前中後三等分：
+  // 這樣像 0.101 跟 0.104 這種只差誤差等級的價差會落在同一級，不會因為排名不同被拆成不同顏色；
+  // 類別裡東西不多但價差真的很大時，也不會硬湊出假的「划算」選項。
+  // 綠：比最便宜貴 5% 以內／黃：貴 5~15%／紅：貴超過 15%
   function tierFor(item, sameCategory){
     if(sameCategory.length < 2) return "gray";
-    const sorted = sameCategory.slice().sort((a,b) => a.cp - b.cp);
-    const idx = sorted.indexOf(item);
-    const third = Math.ceil(sorted.length / 3);
-    if(idx < third) return "green";
-    if(idx < third * 2) return "amber";
+    const best = Math.min(...sameCategory.map(i => i.cp));
+    if(!(best > 0)) return "gray";
+    const diffPct = (item.cp - best) / best;
+    if(diffPct <= 0.05) return "green";
+    if(diffPct <= 0.15) return "amber";
     return "red";
   }
 
