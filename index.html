@@ -1766,7 +1766,7 @@
 
     // 先在本地把所有用到舊地點名稱的既有紀錄改成新名稱，畫面立刻反映
     const affected = items.filter(i => i.location === oldName);
-    affected.forEach(i => { i.location = newName; });
+    affected.forEach(i => { i.location = newName; i.updatedAt = Date.now(); });
 
     buildLocationOptions(itemLocationSelect, itemLocationCustom);
     buildLocationOptions(modalLocationSelect, modalLocationCustom);
@@ -1793,7 +1793,7 @@
     persistLocations();
 
     const affected = items.filter(i => i.location === name);
-    affected.forEach(i => { i.location = ""; });
+    affected.forEach(i => { i.location = ""; i.updatedAt = Date.now(); });
 
     buildLocationOptions(itemLocationSelect, itemLocationCustom);
     buildLocationOptions(modalLocationSelect, modalLocationCustom);
@@ -2007,7 +2007,9 @@
       count: newCount,
       unitPrice, cp, date, location,
       pending: true,
-      uploadError: false
+      uploadError: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     });
 
     renderLocationOptions();
@@ -2116,7 +2118,17 @@
     }
     if(item.subCategory === undefined || item.subCategory === null) item.subCategory = "";
     delete item.categories;
+    // 舊版快取沒有 createdAt／updatedAt（用來讓列表預設依「最近更新」排序），補上預設值
+    if(typeof item.createdAt !== "number") item.createdAt = 0;
+    if(typeof item.updatedAt !== "number") item.updatedAt = item.createdAt;
     return item;
+  }
+
+  // 把試算表的「新增時間」欄位（ISO 字串或 Date）轉成毫秒時間戳，解析失敗就回傳 0
+  function parseTimestamp(value){
+    if(!value) return 0;
+    const t = new Date(value).getTime();
+    return isNaN(t) ? 0 : t;
   }
 
   function normalizeItem(raw){
@@ -2127,6 +2139,8 @@
     const cp = (grams * count) > 0 ? price / (grams * count) : 0;
     const category = String(raw["類別"] || "").trim();
     const subCategory = String(raw["子類別"] || "").trim();
+    // 「新增時間」是後端寫入的建立時間；如果這欄是空的（例如很舊的資料），退而求其次用列號當作大略的新舊排序依據
+    const createdAt = parseTimestamp(raw["新增時間"]) || (Number(raw["_row"]) || 0);
     return {
       row: raw["_row"],
       name: raw["品項名稱"] || "",
@@ -2139,7 +2153,9 @@
       cp: cp,
       date: raw["日期"] || "",
       location: raw["地點"] || "",
-      pending: false
+      pending: false,
+      createdAt: createdAt,
+      updatedAt: createdAt
     };
   }
 
@@ -2253,7 +2269,9 @@
       tempId: tempId,
       name, category, subCategory, grams, price, count, unitPrice, cp, date, location,
       pending: true,
-      uploadError: false
+      uploadError: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     });
 
     renderLocationOptions();
@@ -2344,6 +2362,7 @@
       target.date = fields.date;
       target.location = fields.location;
       target.updating = true;
+      target.updatedAt = Date.now(); // 編輯後視為「最近更新」，讓它在預設列表排序時排到前面
     }
     renderLocationOptions();
     renderCategoryChips();
@@ -2593,6 +2612,12 @@
   function renderTable(){
     updateCategoryStatsBar();
 
+    // 「全部」檢視預設依最近更新排序，排序按鈕（依 CP 值排序）只在篩選特定主類別時才有意義，
+    // 所以切到「全部」時先隱藏按鈕，避免文字跟實際排序方式對不上
+    if(sortToggleBtn){
+      sortToggleBtn.style.display = (activeCategory === "__all__") ? "none" : "";
+    }
+
     let list = items.filter(i => {
       const matchCat = categoryMatches(i, activeCategory);
       const matchSearch = itemMatchesSearch(i, searchTerm);
@@ -2624,12 +2649,19 @@
       // 代表項目：直接取整組中 CP 值最划算的那一筆（不論入數）
       const rep = arr[0];
       const others = arr.filter(i => i !== rep);
+      // 這組最近的一次新增／編輯時間，用於「全部」預設檢視依最近更新排序
+      const latestUpdatedAt = Math.max(...arr.map(i => i.updatedAt || i.createdAt || 0));
 
-      return { key, items: arr, rep, others, bestCp: arr[0].cp };
+      return { key, items: arr, rep, others, bestCp: arr[0].cp, latestUpdatedAt };
     });
 
-    // 組與組之間依目前排序方向（依各組最划算的 CP 值）排序
-    groups.sort((a,b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
+    // 「全部」檢視預設依最近新增／編輯時間排序（越新越前面），方便馬上看到剛加入或剛改過的紀錄；
+    // 一旦點擊切換到特定主類別，才改用 CP 值排序方便比價（依排序按鈕的方向）
+    if(activeCategory === "__all__"){
+      groups.sort((a, b) => b.latestUpdatedAt - a.latestUpdatedAt);
+    } else {
+      groups.sort((a, b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
+    }
 
     function renderRow(item, opts){
       const { isRep, multi, isBestOfGroup, sub } = opts;
