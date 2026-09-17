@@ -1303,6 +1303,8 @@
   let searchTerm = "";
   let sortAsc = true;
   let expandedGroups = new Set();
+  // 「全部」檢視預設只顯示最近更新的一小段，點了「顯示全部」之後才在本次瀏覽期間保持展開
+  let showAllRecent = false;
 
   const $ = (id) => document.getElementById(id);
   const scriptUrlInput = $("scriptUrl");
@@ -2943,7 +2945,7 @@
     allChip.className = "chip" + (activeCategory === "__all__" ? " active" : "");
     allChip.textContent = "全部";
     allChip.dataset.cat = "__all__";
-    allChip.addEventListener("click", () => { activeCategory = "__all__"; renderCategoryChips(); renderTable(); });
+    allChip.addEventListener("click", () => { activeCategory = "__all__"; showAllRecent = false; renderCategoryChips(); renderTable(); });
     categoryChips.appendChild(allChip);
     parents.forEach(p => {
       const chip = document.createElement("button");
@@ -3148,6 +3150,16 @@
       groups.sort((a, b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
     }
 
+    // 「全部」檢視預設只顯示最近更新的一小段，避免一次把所有紀錄都攤開；
+    // 只要有在搜尋，或已經按過「顯示更多」，就不再截斷。切某個主類別/子類別篩選時不受影響，一律顯示完整結果。
+    const ALL_VIEW_RECENT_LIMIT = 8;
+    let hiddenCount = 0;
+    let groupsToRender = groups;
+    if(activeCategory === "__all__" && !searchTerm && !showAllRecent && groups.length > ALL_VIEW_RECENT_LIMIT){
+      groupsToRender = groups.slice(0, ALL_VIEW_RECENT_LIMIT);
+      hiddenCount = groups.length - ALL_VIEW_RECENT_LIMIT;
+    }
+
     function renderRow(item, opts){
       const { isRep, multi, isBestOfGroup, sub } = opts;
       let tier;
@@ -3214,7 +3226,7 @@
       `;
     }
 
-    tableBody.innerHTML = groups.map(group => {
+    tableBody.innerHTML = groupsToRender.map(group => {
       const { key, items: arr, rep, others } = group;
       const multi = arr.length > 1;
       const groupHeader = multi
@@ -3237,7 +3249,9 @@
       }
 
       return `<div class="group-block">${groupHeader}${repRow}${othersHtml}</div>`;
-    }).join("");
+    }).join("") + (hiddenCount > 0
+      ? `<button type="button" id="showAllRecentBtn" class="sub-toggle">▾ 顯示全部紀錄（還有 ${hiddenCount} 筆未顯示）</button>`
+      : "");
 
     tableBody.querySelectorAll(".del").forEach(btn => {
       btn.addEventListener("click", () => deleteItem(btn.dataset.row));
@@ -3254,7 +3268,7 @@
         if(item) openCompareModal(item);
       });
     });
-    tableBody.querySelectorAll(".sub-toggle").forEach(btn => {
+    tableBody.querySelectorAll(".sub-toggle[data-group]").forEach(btn => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.group;
         if(expandedGroups.has(key)) expandedGroups.delete(key);
@@ -3262,6 +3276,13 @@
         renderTable();
       });
     });
+    const showAllRecentBtn = $("showAllRecentBtn");
+    if(showAllRecentBtn){
+      showAllRecentBtn.addEventListener("click", () => {
+        showAllRecent = true;
+        renderTable();
+      });
+    }
   }
 
   function formatNum(n){
