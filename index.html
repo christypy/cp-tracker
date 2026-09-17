@@ -921,6 +921,39 @@
     background:var(--paper-2);
   }
 
+  /* ---------- 快速跳到管理區塊的按鈕（放在頁面最上方，避免使用者找不到） ---------- */
+  #quickManageLinks{
+    max-width:880px;
+    margin:0 auto;
+    padding:0 16px 4px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    justify-content:center;
+  }
+  #quickManageLinks button{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.03em;
+    padding:6px 12px;
+    border:1px dashed var(--line);
+    border-radius:20px;
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  #quickManageLinks button:hover{
+    color:var(--ink);
+    border-color:var(--ink-soft);
+  }
+  details.jump-highlight{
+    animation:jumpFlash 1.4s ease;
+  }
+  @keyframes jumpFlash{
+    0%{box-shadow:0 0 0 3px var(--gold);}
+    100%{box-shadow:none;}
+  }
+
   footer{
     text-align:center;
     font-size:11px;
@@ -1011,6 +1044,11 @@
     <span class="sync-url" id="syncUrlDisplay"></span>
   </div>
   <button id="refreshBtn" title="重新整理">↻</button>
+</div>
+
+<div id="quickManageLinks">
+  <button type="button" id="jumpToCategoryManager">🏷 管理主類別／子類別</button>
+  <button type="button" id="jumpToLocationManager">📍 管理購買地點</button>
 </div>
 
 <main>
@@ -2202,6 +2240,28 @@
     categoryManagerMsg.textContent = `已移除，正在同步 ${affected.length} 筆既有紀錄…`;
     setSyncState("syncing", "背景更新中…");
     syncCategoryChangeToServer(affected, (n) => `已移除並同步 ${n} 筆紀錄`);
+  }
+
+  // ---------- 頁面最上方的「快速跳到管理區塊」按鈕 ----------
+  // 「管理購買地點」「管理主類別／子類別」都是摺疊起來的區塊，放在頁面下方設定裡，
+  // 很容易被忽略，所以在最上面加兩顆按鈕，點了直接捲過去、自動展開、並閃一下提示位置。
+  function jumpToDetails(detailsEl){
+    if(!detailsEl) return;
+    detailsEl.open = true;
+    detailsEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    detailsEl.classList.remove("jump-highlight");
+    // 強制重新觸發動畫
+    void detailsEl.offsetWidth;
+    detailsEl.classList.add("jump-highlight");
+  }
+
+  const jumpToCategoryManagerBtn = $("jumpToCategoryManager");
+  const jumpToLocationManagerBtn = $("jumpToLocationManager");
+  if(jumpToCategoryManagerBtn){
+    jumpToCategoryManagerBtn.addEventListener("click", () => jumpToDetails($("categoryManager")));
+  }
+  if(jumpToLocationManagerBtn){
+    jumpToLocationManagerBtn.addEventListener("click", () => jumpToDetails($("locationManager")));
   }
 
   // ---------- 快速比價 Modal 邏輯 ----------
