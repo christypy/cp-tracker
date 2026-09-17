@@ -3067,17 +3067,19 @@
     return map;
   }
 
-  // 分級改成「跟同類別裡最划算的比，貴了幾 %」，而不是硬切名次前中後三等分：
-  // 這樣像 0.101 跟 0.104 這種只差誤差等級的價差會落在同一級，不會因為排名不同被拆成不同顏色；
-  // 類別裡東西不多但價差真的很大時，也不會硬湊出假的「划算」選項。
-  // 綠：比最便宜貴 5% 以內／黃：貴 5~15%／紅：貴超過 15%
+  // 分級改成跟「排名」用同一套依據：在同一個類別分組裡，依名次切成前中後三段
+  // （前 1/3 綠、中 1/3 黃、後 1/3 紅），這樣顏色永遠跟旁邊顯示的「第X名/總數」一致，
+  // 不會出現「排名第2名卻標示偏貴」這種兩套邏輯互相矛盾的狀況。
+  // 只有 2 筆時沒有中間地帶，直接綠／紅。
   function tierFor(item, sameCategory){
     if(sameCategory.length < 2) return "gray";
-    const best = Math.min(...sameCategory.map(i => i.cp));
-    if(!(best > 0)) return "gray";
-    const diffPct = (item.cp - best) / best;
-    if(diffPct <= 0.05) return "green";
-    if(diffPct <= 0.15) return "amber";
+    const sorted = sameCategory.slice().sort((a,b) => a.cp - b.cp);
+    const idx = sorted.indexOf(item);
+    if(idx === -1) return "gray";
+    const total = sorted.length;
+    const percentile = idx / (total - 1); // 0 = 最划算，1 = 最貴
+    if(percentile <= 1/3) return "green";
+    if(percentile <= 2/3) return "amber";
     return "red";
   }
 
@@ -3235,13 +3237,9 @@
       let tier;
       if(item.pending){
         tier = "gray";
-      } else if(multi){
-        const arr = groupsMap.get(item.name.trim().toLowerCase());
-        const idx = arr.indexOf(item);
-        if(idx === 0) tier = "green";
-        else if(idx === arr.length - 1) tier = "red";
-        else tier = "amber";
       } else {
+        // 不論是不是「同名不同容量」分組，紅黃綠燈一律用同一個類別分組計算，
+        // 跟旁邊的「排名」badge 永遠是同一套依據，不會互相矛盾。
         const cat = itemPrimaryCategoryPath(item);
         const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
         tier = tierFor(item, sameCategory);
