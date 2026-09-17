@@ -390,23 +390,7 @@
     flex:none;
   }
 
-  /* ---------- category leaderboard (主類別 CP值排行榜，不用點擊主類別排名就會顯示，點擊才展開子類別) ---------- */
-  #categoryLeaderboard{
-    max-width:880px;
-    width:calc(100% - 32px);
-    box-sizing:border-box;
-    margin:0 auto 18px;
-  }
-  #categoryLeaderboard:empty{display:none;}
-  .leaderboard-card{
-    background:var(--white);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    box-shadow:0 1px 0 var(--line), 0 6px 16px -12px rgba(43,40,32,.4);
-    padding:16px 16px 8px;
-  }
-  .leaderboard-card{padding:12px 14px 10px;}
-  .leaderboard-card .card-title{margin-bottom:8px; font-size:13px;}
+  /* ---------- leaderboard-style chip picker（主類別／子類別排行榜共用樣式，用於表單內選取類別） ---------- */
   .leaderboard-strip{
     display:flex;
     flex-wrap:wrap;
@@ -460,29 +444,6 @@
     color:var(--green);
     flex:none;
   }
-  .leaderboard-sub-panel{
-    margin-top:8px;
-    padding-top:8px;
-    border-top:1px dashed var(--line);
-  }
-  .leaderboard-sub-title{
-    font-size:11px;
-    color:var(--ink-soft);
-    margin-bottom:6px;
-  }
-  .leaderboard-sub-list{
-    display:flex;
-    flex-direction:column;
-    gap:4px;
-  }
-  .leaderboard-sub-row{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    font-size:12px;
-    padding:2px 0;
-  }
-  .leaderboard-sub-row .lb-name{flex:1; overflow:hidden; text-overflow:ellipsis;}
   .leaderboard-sub-empty{
     padding-top:2px;
     font-size:12px;
@@ -937,8 +898,6 @@
   <button id="refreshBtn" title="重新整理">↻</button>
 </div>
 
-<div id="categoryLeaderboard"></div>
-
 <main>
 
   <!-- 新增品項（先算再填資料） -->
@@ -1158,8 +1117,6 @@
   const formMsg = $("formMsg");
   const addBtn = $("addBtn");
   const categoryStatsBar = $("categoryStatsBar");
-  const categoryLeaderboard = $("categoryLeaderboard");
-  let expandedLeaderboardMain = null; // 記錄排行榜目前點開顯示子類別的主類別（一次只展開一個，維持一行式排行榜精簡）
 
   scriptUrlInput.value = scriptUrl;
 
@@ -2309,59 +2266,6 @@
     return stats;
   }
 
-  function renderSubLeaderboard(parentCat){
-    const subStats = computeSubCategoryStats(parentCat).slice(0, 10);
-    if(subStats.length === 0){
-      return `<div class="leaderboard-sub-empty">這個主類別底下還沒有子類別資料</div>`;
-    }
-    return `<div class="leaderboard-sub-list">` + subStats.map((s, idx) => `
-      <div class="leaderboard-sub-row">
-        <span class="lb-rank sub mono">${idx + 1}</span>
-        <span class="lb-name">${escapeHtml(s.sub)}</span>
-        <span class="lb-count">${s.count}筆</span>
-        <span class="lb-avg mono">${s.avg.toFixed(3)} $/g</span>
-      </div>
-    `).join("") + `</div>`;
-  }
-
-  // 排行榜改成一行式：主類別排名以可橫向滑動的小標籤呈現，點擊某個標籤才在下方展開該類別的子類別排名
-  function renderCategoryLeaderboard(){
-    const stats = computeMainCategoryStats();
-    if(stats.length === 0){
-      categoryLeaderboard.innerHTML = "";
-      return;
-    }
-    const top = stats.slice(0, 10); // 不足10個主類別就取現有總數
-    const activeCat = expandedLeaderboardMain;
-    categoryLeaderboard.innerHTML = `
-      <div class="leaderboard-card">
-        <p class="card-title">主類別 CP值排行榜（前 ${top.length} 名・點擊看子類別）</p>
-        <div class="leaderboard-strip">
-          ${top.map((s, idx) => `
-            <button type="button" class="leaderboard-chip${activeCat === s.cat ? " active" : ""}" data-cat="${escapeHtml(s.cat)}">
-              <span class="lb-rank mono">${idx + 1}</span>
-              <span class="lb-name">${escapeHtml(s.cat)}</span>
-              <span class="lb-avg mono">${s.avg.toFixed(3)}</span>
-            </button>
-          `).join("")}
-        </div>
-        ${activeCat ? `
-          <div class="leaderboard-sub-panel">
-            <p class="leaderboard-sub-title">${escapeHtml(activeCat)} ▸ 子類別排名</p>
-            ${renderSubLeaderboard(activeCat)}
-          </div>
-        ` : ""}
-      </div>
-    `;
-    categoryLeaderboard.querySelectorAll(".leaderboard-chip").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const cat = btn.dataset.cat;
-        expandedLeaderboardMain = (expandedLeaderboardMain === cat) ? null : cat;
-        renderCategoryLeaderboard();
-      });
-    });
-  }
-
   // 搜尋框比對邏輯：同時比對品項名稱、主類別、子類別，只要其中一個包含關鍵字就算符合，
   // 這樣不只能搜品項名稱，也能直接輸入類別或子類別名稱來篩選（例如輸入「甜的」會列出所有「甜的」子類別的品項）
   function itemMatchesSearch(item, term){
@@ -2373,7 +2277,6 @@
 
   function renderTable(){
     updateCategoryStatsBar();
-    renderCategoryLeaderboard();
 
     let list = items.filter(i => {
       const matchCat = categoryMatches(i, activeCategory);
