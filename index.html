@@ -1278,15 +1278,9 @@
     </form>
   </section>
 
-</main>
-
-<!-- 產品列表彈跳視窗（原本的篩選／搜尋／表格，改用懸浮按鈕開啟） -->
-<div id="listModal" class="app-modal-backdrop">
-  <div class="app-modal-box wide">
-    <div class="app-modal-header">
-      <p class="card-title">📋 產品列表</p>
-      <button type="button" class="app-modal-close" id="closeListModalBtn">關閉 ✕</button>
-    </div>
+  <!-- 產品列表（頁面內區塊，不再是彈跳視窗；懸浮按鈕只負責快速捲動到這裡） -->
+  <section class="tag-card" id="listSection">
+    <p class="card-title">📋 產品列表</p>
 
     <!-- 篩選 / 搜尋 -->
     <section class="controls" style="flex-direction:column; align-items:stretch; margin-bottom:14px;">
@@ -1321,8 +1315,9 @@
         <div class="empty-state">載入中…</div>
       </div>
     </section>
-  </div>
-</div>
+  </section>
+
+</main>
 
 <!-- 設定同步網址彈跳視窗 -->
 <div id="settingsModal" class="app-modal-backdrop">
@@ -2525,7 +2520,6 @@
       });
     }
   }
-  wireAppModal("listModal", "closeListModalBtn");
   wireAppModal("settingsModal", "closeSettingsModalBtn");
   wireAppModal("locationModal", "closeLocationModalBtn");
   wireAppModal("categoryModal", "closeCategoryModalBtn");
@@ -2534,10 +2528,13 @@
     document.querySelectorAll(".app-modal-backdrop.show").forEach(b => closeAppModal(b.id));
   });
 
-  // 懸浮按鈕：查看產品列表
+  // 懸浮按鈕：快速捲動到下方的產品列表（列表本身直接顯示在頁面上，不彈跳視窗）
   const viewListFabBtn = $("viewListFab");
-  if(viewListFabBtn){
-    viewListFabBtn.addEventListener("click", () => openAppModal("listModal"));
+  const listSectionEl = $("listSection");
+  if(viewListFabBtn && listSectionEl){
+    viewListFabBtn.addEventListener("click", () => {
+      listSectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   // 最上方的「快速跳到管理彈窗」按鈕
@@ -3583,8 +3580,7 @@
   window.addEventListener("resize", () => {
     clearTimeout(resizeRenderTimer);
     resizeRenderTimer = setTimeout(() => {
-      const listModalEl = $("listModal");
-      if(listModalEl && listModalEl.classList.contains("show")) renderTable();
+      renderTable();
     }, 200);
   });
 
