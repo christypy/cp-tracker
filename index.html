@@ -661,18 +661,6 @@
     margin-left:2px;
     white-space:nowrap;
   }
-  .rank-badge{
-    font-family:'Space Mono', monospace;
-    font-size:10px;
-    color:var(--white);
-    background:var(--gold);
-    padding:1px 7px;
-    border-radius:999px;
-    margin-left:2px;
-    margin-top:2px;
-    white-space:nowrap;
-    display:inline-block;
-  }
   .sub-toggle{
     font-family:'Space Mono', monospace;
     font-size:11px;
@@ -784,8 +772,8 @@
     font-family:'Space Mono', monospace;
     letter-spacing:.04em;
   }
-  .rank-badge.live{
-    background:var(--green);
+  .tier-tag.tier-live{
+    border:1px dashed currentColor;
   }
 
   /* ---------- category average stats bar ---------- */
@@ -803,20 +791,85 @@
   #categoryStatsBar.show{display:block;}
   #categoryStatsBar strong{color:var(--ink);}
 
-  /* ---------- settings ---------- */
-  details#settings{
+  /* ---------- 通用彈跳視窗（管理功能／產品列表都改用這套） ---------- */
+  .app-modal-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(43,40,32,.5);
+    z-index:600;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px 12px;
+    overflow-y:auto;
+  }
+  .app-modal-backdrop.show{display:flex;}
+  .app-modal-box{
     background:var(--white);
     border:1px solid var(--line);
     border-radius:var(--radius);
-    padding:14px 18px;
+    padding:18px 18px 20px;
+    width:100%;
+    max-width:640px;
+    margin:auto;
+    box-shadow:0 20px 50px -20px rgba(43,40,32,.6);
+    position:relative;
   }
-  details#settings summary{
-    cursor:pointer;
+  .app-modal-box.narrow{max-width:460px;}
+  .app-modal-box.wide{max-width:880px;}
+  .app-modal-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .app-modal-header .card-title{margin:0;text-align:left;}
+  .app-modal-close{
     font-family:'Space Mono', monospace;
-    font-size:12px;
+    font-size:13px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
     color:var(--ink-soft);
-    letter-spacing:.06em;
+    cursor:pointer;
+    flex:none;
   }
+  .app-modal-close:hover{color:var(--ink); border-color:var(--ink);}
+
+  /* ---------- 懸浮按鈕：查看產品列表 ---------- */
+  #viewListFab{
+    position:fixed;
+    left:16px;
+    bottom:18px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:12px 16px;
+    border:none;
+    border-radius:999px;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Space Mono', monospace;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 6px 18px -6px rgba(43,40,32,.5);
+    z-index:480;
+  }
+  #viewListFab:active{opacity:.8;}
+  #viewListFab .fab-count{
+    background:var(--gold);
+    color:var(--white);
+    border-radius:999px;
+    font-size:11px;
+    padding:1px 7px;
+    min-width:18px;
+    text-align:center;
+  }
+
+  /* ---------- settings ---------- */
   .settings-body{
     margin-top:14px;
     display:flex;
@@ -851,20 +904,6 @@
   }
 
   /* ---------- 管理購買地點 ---------- */
-  details#locationManager{
-    background:var(--white);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:14px 18px;
-    margin-top:12px;
-  }
-  details#locationManager summary{
-    cursor:pointer;
-    font-family:'Space Mono', monospace;
-    font-size:12px;
-    color:var(--ink-soft);
-    letter-spacing:.06em;
-  }
   .location-manager-list{
     display:flex;
     flex-direction:column;
@@ -931,20 +970,6 @@
   }
 
   /* ---------- 管理主類別／子類別 ---------- */
-  details#categoryManager{
-    background:var(--white);
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:14px 18px;
-    margin-top:12px;
-  }
-  details#categoryManager summary{
-    cursor:pointer;
-    font-family:'Space Mono', monospace;
-    font-size:12px;
-    color:var(--ink-soft);
-    letter-spacing:.06em;
-  }
   .category-manager-group{
     display:flex;
     flex-direction:column;
@@ -990,12 +1015,12 @@
     color:var(--ink);
     border-color:var(--ink-soft);
   }
-  details.jump-highlight{
+  .app-modal-box.jump-highlight{
     animation:jumpFlash 1.4s ease;
   }
   @keyframes jumpFlash{
     0%{box-shadow:0 0 0 3px var(--gold);}
-    100%{box-shadow:none;}
+    100%{box-shadow:0 20px 50px -20px rgba(43,40,32,.6);}
   }
 
   footer{
@@ -1095,7 +1120,10 @@
 <div id="quickManageLinks">
   <button type="button" id="jumpToCategoryManager">🏷 管理主類別／子類別</button>
   <button type="button" id="jumpToLocationManager">📍 管理購買地點</button>
+  <button type="button" id="jumpToSettings">⚙ 設定同步網址</button>
 </div>
+
+<button type="button" id="viewListFab" title="查看產品列表">📋 產品列表<span class="fab-count" id="fabCount">0</span></button>
 
 <main>
 
@@ -1180,52 +1208,74 @@
     </form>
   </section>
 
-  <!-- 篩選 / 搜尋 -->
-  <section class="controls" style="flex-direction:column; align-items:stretch;">
-    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
-      <div class="chips" id="categoryChips">
-        <button class="chip active" data-cat="__all__">全部</button>
-      </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
-        <input type="text" id="searchInput" placeholder="搜尋品項／類別／子類別…">
-      </div>
-    </div>
-    <div class="chips" id="childCategoryChips"></div>
-  </section>
+</main>
 
-  <div id="categoryStatsBar"></div>
+<!-- 產品列表彈跳視窗（原本的篩選／搜尋／表格，改用懸浮按鈕開啟） -->
+<div id="listModal" class="app-modal-backdrop">
+  <div class="app-modal-box wide">
+    <div class="app-modal-header">
+      <p class="card-title">📋 產品列表</p>
+      <button type="button" class="app-modal-close" id="closeListModalBtn">關閉 ✕</button>
+    </div>
 
-  <!-- 表格 -->
-  <section class="receipt">
-    <div class="receipt-row head">
-      <div>品項 / 類別 (點擊名稱可比價)</div>
-      <div class="stats">
-        <div class="stat grams-col">克數</div>
-        <div class="stat price-col">總價</div>
-        <div class="stat count-col">數量</div>
-        <div class="stat">單罐價</div>
+    <!-- 篩選 / 搜尋 -->
+    <section class="controls" style="flex-direction:column; align-items:stretch; margin-bottom:14px;">
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+        <div class="chips" id="categoryChips">
+          <button class="chip active" data-cat="__all__">全部</button>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
+          <input type="text" id="searchInput" placeholder="搜尋品項／類別／子類別…">
+        </div>
       </div>
-      <div class="num">$ / g</div>
-      <div></div>
-    </div>
-    <div id="tableBody">
-      <div class="empty-state">載入中…</div>
-    </div>
-  </section>
+      <div class="chips" id="childCategoryChips"></div>
+    </section>
 
-  <!-- 設定 -->
-  <details id="settings">
-    <summary>⚙ 設定同步網址</summary>
+    <div id="categoryStatsBar"></div>
+
+    <!-- 表格 -->
+    <section class="receipt">
+      <div class="receipt-row head">
+        <div>品項 / 類別 (點擊名稱可比價)</div>
+        <div class="stats">
+          <div class="stat grams-col">克數</div>
+          <div class="stat price-col">總價</div>
+          <div class="stat count-col">數量</div>
+          <div class="stat">單罐價</div>
+        </div>
+        <div class="num">$ / g</div>
+        <div></div>
+      </div>
+      <div id="tableBody">
+        <div class="empty-state">載入中…</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- 設定同步網址彈跳視窗 -->
+<div id="settingsModal" class="app-modal-backdrop">
+  <div class="app-modal-box narrow">
+    <div class="app-modal-header">
+      <p class="card-title">⚙ 設定同步網址</p>
+      <button type="button" class="app-modal-close" id="closeSettingsModalBtn">關閉 ✕</button>
+    </div>
     <div class="settings-body">
       <p>把你部署好的 Google Apps Script 網頁應用程式網址貼在這裡。網址會存在這台裝置的瀏覽器裡，不會上傳到任何地方。</p>
       <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
       <button id="saveUrlBtn">儲存網址</button>
     </div>
-  </details>
+  </div>
+</div>
 
-  <details id="locationManager">
-    <summary>📍 管理購買地點</summary>
+<!-- 管理購買地點彈跳視窗 -->
+<div id="locationModal" class="app-modal-backdrop">
+  <div class="app-modal-box">
+    <div class="app-modal-header">
+      <p class="card-title">📍 管理購買地點</p>
+      <button type="button" class="app-modal-close" id="closeLocationModalBtn">關閉 ✕</button>
+    </div>
     <div class="settings-body">
       <p>新增、刪除、編輯購買地點。編輯名稱時，所有使用這個地點的既有紀錄會自動一併同步更新；如果把名稱改成跟另一個既有地點一樣，會直接把兩個地點合併成一個。刪除地點不會刪除紀錄本身，只會清空這些紀錄的購買地點欄位。</p>
       <div id="locationManagerList" class="location-manager-list"></div>
@@ -1235,10 +1285,16 @@
       </div>
       <div id="locationManagerMsg" class="location-manager-msg"></div>
     </div>
-  </details>
+  </div>
+</div>
 
-  <details id="categoryManager">
-    <summary>🏷 管理主類別／子類別</summary>
+<!-- 管理主類別／子類別彈跳視窗 -->
+<div id="categoryModal" class="app-modal-backdrop">
+  <div class="app-modal-box">
+    <div class="app-modal-header">
+      <p class="card-title">🏷 管理主類別／子類別</p>
+      <button type="button" class="app-modal-close" id="closeCategoryModalBtn">關閉 ✕</button>
+    </div>
     <div class="settings-body">
       <p>改名／搬移／移除都會自動同步既有紀錄。子類別預設收合，點類別下方的展開列可以看到底下的子類別。</p>
       <input type="text" id="categoryManagerFilter" placeholder="搜尋主類別／子類別名稱…" autocomplete="off">
@@ -1246,9 +1302,8 @@
       <div id="categoryManagerMsg" class="location-manager-msg"></div>
       <datalist id="categoryManagerDatalist"></datalist>
     </div>
-  </details>
-
-</main>
+  </div>
+</div>
 
 <!-- 比價彈窗 Modal -->
 <div id="compareModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
@@ -1646,8 +1701,9 @@
   itemCountInput.addEventListener("input", updateCalc);
 
   // 依目前輸入的克數／總價／數量／主類別／子類別，即時試算「如果現在把這筆存進去，
-  // 在所屬類別（主類別，以及每個已選子類別）中 CP 值大約會排第幾名」，還沒送出表單就能看到，
+  // 在所屬類別（主類別，以及每個已選子類別）中大概算划算、普通還是偏貴」，還沒送出表單就能看到燈號，
   // 若是在編輯既有紀錄，會先把該筆自己從比較清單中排除，避免跟自己比較。
+  const LIVE_TIER_LABELS = { green:"划算", amber:"普通", red:"偏貴" };
   function updateLiveRank(){
     const g = parseFloat(itemGramsInput.value);
     const p = parseFloat(itemPriceInput.value);
@@ -1671,14 +1727,17 @@
       const cps = group.map(i => i.cp);
       cps.push(cp);
       cps.sort((a, b) => a - b);
-      const rank = cps.indexOf(cp) + 1;
+      const idx = cps.indexOf(cp);
       const total = cps.length;
+      const percentile = total > 1 ? idx / (total - 1) : 0;
+      const tier = total < 2 ? "gray" : (percentile <= 1/3 ? "green" : (percentile <= 2/3 ? "amber" : "red"));
       const { parent, child } = splitCategoryPath(path);
       const label = child ? `${escapeHtml(parent)}▸${escapeHtml(child)}` : escapeHtml(parent);
-      return `<span class="rank-badge live" title="假設現在把這筆存進去，在這個類別中依 CP 值由低到高估算的名次">${label} 預估第${rank}名／${total}</span>`;
+      const tierLabel = LIVE_TIER_LABELS[tier] || "尚無比較對象";
+      return `<span class="tier-tag tier-${tier} tier-live" title="假設現在把這筆存進去，在這個類別中估算的划算程度"><span class="dot ${tier}"></span>${label} ${tierLabel}</span>`;
     });
 
-    liveRankPreview.innerHTML = `<span class="live-rank-label">即時排名預覽：</span>` + badges.join("");
+    liveRankPreview.innerHTML = `<span class="live-rank-label">即時燈號預覽：</span>` + badges.join("");
     liveRankPreview.classList.add("show");
   }
 
@@ -2357,26 +2416,65 @@
     syncCategoryChangeToServer(affected, (n) => `已移除並同步 ${n} 筆紀錄`);
   }
 
-  // ---------- 頁面最上方的「快速跳到管理區塊」按鈕 ----------
-  // 「管理購買地點」「管理主類別／子類別」都是摺疊起來的區塊，放在頁面下方設定裡，
-  // 很容易被忽略，所以在最上面加兩顆按鈕，點了直接捲過去、自動展開、並閃一下提示位置。
-  function jumpToDetails(detailsEl){
-    if(!detailsEl) return;
-    detailsEl.open = true;
-    detailsEl.scrollIntoView({ behavior: "smooth", block: "center" });
-    detailsEl.classList.remove("jump-highlight");
-    // 強制重新觸發動畫
-    void detailsEl.offsetWidth;
-    detailsEl.classList.add("jump-highlight");
+  // ---------- 通用彈跳視窗（管理功能／產品列表都改用同一套開關邏輯） ----------
+  function openAppModal(id){
+    const backdrop = $(id);
+    if(!backdrop) return;
+    backdrop.classList.add("show");
+    const box = backdrop.querySelector(".app-modal-box");
+    if(box){
+      box.scrollTop = 0;
+      box.classList.remove("jump-highlight");
+      void box.offsetWidth; // 強制重新觸發動畫
+      box.classList.add("jump-highlight");
+    }
+    document.body.style.overflow = "hidden";
+  }
+  function closeAppModal(id){
+    const backdrop = $(id);
+    if(!backdrop) return;
+    backdrop.classList.remove("show");
+    if(!document.querySelector(".app-modal-backdrop.show")){
+      document.body.style.overflow = "";
+    }
+  }
+  function wireAppModal(backdropId, closeBtnId){
+    const backdrop = $(backdropId);
+    const closeBtn = $(closeBtnId);
+    if(closeBtn) closeBtn.addEventListener("click", () => closeAppModal(backdropId));
+    if(backdrop){
+      backdrop.addEventListener("click", (e) => {
+        if(e.target === backdrop) closeAppModal(backdropId);
+      });
+    }
+  }
+  wireAppModal("listModal", "closeListModalBtn");
+  wireAppModal("settingsModal", "closeSettingsModalBtn");
+  wireAppModal("locationModal", "closeLocationModalBtn");
+  wireAppModal("categoryModal", "closeCategoryModalBtn");
+  document.addEventListener("keydown", (e) => {
+    if(e.key !== "Escape") return;
+    document.querySelectorAll(".app-modal-backdrop.show").forEach(b => closeAppModal(b.id));
+  });
+
+  // 懸浮按鈕：查看產品列表
+  const viewListFabBtn = $("viewListFab");
+  if(viewListFabBtn){
+    viewListFabBtn.addEventListener("click", () => openAppModal("listModal"));
   }
 
+  // 最上方的「快速跳到管理彈窗」按鈕
   const jumpToCategoryManagerBtn = $("jumpToCategoryManager");
   const jumpToLocationManagerBtn = $("jumpToLocationManager");
+  const jumpToSettingsBtn = $("jumpToSettings");
   if(jumpToCategoryManagerBtn){
-    jumpToCategoryManagerBtn.addEventListener("click", () => jumpToDetails($("categoryManager")));
+    jumpToCategoryManagerBtn.addEventListener("click", () => openAppModal("categoryModal"));
   }
   if(jumpToLocationManagerBtn){
-    jumpToLocationManagerBtn.addEventListener("click", () => jumpToDetails($("locationManager")));
+    jumpToLocationManagerBtn.addEventListener("click", () => openAppModal("locationModal"));
+  }
+  if(jumpToSettingsBtn){
+    jumpToSettingsBtn.addEventListener("click", () => openAppModal("settingsModal"));
   }
 
   // ---------- 快速比價 Modal 邏輯 ----------
@@ -3067,9 +3165,8 @@
     return map;
   }
 
-  // 分級改成跟「排名」用同一套依據：在同一個類別分組裡，依名次切成前中後三段
-  // （前 1/3 綠、中 1/3 黃、後 1/3 紅），這樣顏色永遠跟旁邊顯示的「第X名/總數」一致，
-  // 不會出現「排名第2名卻標示偏貴」這種兩套邏輯互相矛盾的狀況。
+  // 分級：在同一個類別分組裡，依 CP 值切成前中後三段（前 1/3 綠、中 1/3 黃、後 1/3 紅），
+  // 不顯示排名數字，只靠紅黃綠燈讓人一眼判斷划不划算。
   // 只有 2 筆時沒有中間地帶，直接綠／紅。
   function tierFor(item, sameCategory){
     if(sameCategory.length < 2) return "gray";
@@ -3083,17 +3180,11 @@
     return "red";
   }
 
-  // 該品項在所屬類別（主類別/子類別完整路徑）中的 CP 值名次（由低到高，數字越小越划算）。
-  // 若有多個子類別，每個子類別各自回傳一筆名次資訊。
-  function rankInfoFor(item, categoryMap){
-    return itemCategoryPaths(item).map(cat => {
-      const group = categoryMap.get(cat);
-      if(!group || group.length < 2) return null;
-      const sorted = group.slice().sort((a,b) => a.cp - b.cp);
-      const idx = sorted.indexOf(item);
-      if(idx === -1) return null;
-      return { cat, rank: idx + 1, total: sorted.length };
-    }).filter(Boolean);
+  // 懸浮按鈕上的數字：目前有效紀錄（不含還在背景上傳中的暫存項目）總筆數
+  const fabCountEl = $("fabCount");
+  function updateFabCount(){
+    if(!fabCountEl) return;
+    fabCountEl.textContent = items.filter(i => !i.pending).length;
   }
 
   function updateCategoryStatsBar(){
@@ -3163,6 +3254,7 @@
 
   function renderTable(){
     updateCategoryStatsBar();
+    updateFabCount();
 
     // 「全部」檢視預設依最近更新排序，排序按鈕（依 CP 值排序）只在篩選特定主類別時才有意義，
     // 所以切到「全部」時先隱藏按鈕，避免文字跟實際排序方式對不上
@@ -3238,20 +3330,13 @@
       if(item.pending){
         tier = "gray";
       } else {
-        // 不論是不是「同名不同容量」分組，紅黃綠燈一律用同一個類別分組計算，
-        // 跟旁邊的「排名」badge 永遠是同一套依據，不會互相矛盾。
+        // 不再顯示排名數字，紅黃綠燈是唯一的划算程度依據：一律用同一個類別分組計算
         const cat = itemPrimaryCategoryPath(item);
         const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
         tier = tierFor(item, sameCategory);
       }
 
-      const rankInfos = !item.pending ? rankInfoFor(item, categoryMap) : [];
-      const rankBadge = rankInfos.map(r => {
-        const { parent, child } = splitCategoryPath(r.cat);
-        const label = child ? `${escapeHtml(parent)}▸${escapeHtml(child)}` : escapeHtml(parent);
-        return `<span class="rank-badge" title="在「${label}」類別中依 CP 值由低到高排名，數字越小越划算">${label} 第${r.rank}名／${r.total}</span>`;
-      }).join("");
-      // 紅黃綠燈：跟排名數字互補，不用細看名次就能一眼判斷划不划算
+      // 紅黃綠燈：一眼判斷划不划算，不再顯示排名數字
       const TIER_LABELS = { green:"划算", amber:"普通", red:"偏貴" };
       const tierTag = (TIER_LABELS[tier] && !item.pending)
         ? `<span class="tier-tag tier-${tier}" title="跟同類別/同品項中最划算的比較：綠色划算、黃色普通、紅色偏貴"><span class="dot ${tier}"></span>${TIER_LABELS[tier]}</span>`
@@ -3278,7 +3363,7 @@
       return `
         <div class="${rowClass}">
           <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${tierTag}${rankBadge}
+            ${escapeHtml(item.name)} ${bestBadge}${convertedBadge}${tierTag}
             <span class="cat-badge-group">${catBadges}</span>
             ${dateBadge}
             ${locationBadge}
