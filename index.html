@@ -857,6 +857,23 @@
   }
   .app-modal-box.narrow{max-width:460px;}
   .app-modal-box.wide{max-width:880px;}
+  /* .tall：內容較多的彈窗（例如類別管理）限制最高高度，超出的部分在內容區自己捲動，
+     這樣彈窗本身不會被撐得無限長，標題列跟工具列也會固定在畫面上不跑掉 */
+  .app-modal-box.tall{
+    display:flex;
+    flex-direction:column;
+    max-height:min(85vh, 720px);
+  }
+  .app-modal-box.tall .app-modal-header{flex:none; margin-bottom:10px;}
+  .app-modal-box.tall > .settings-body{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    padding-right:2px;
+  }
+  @media (max-width:560px){
+    .app-modal-box.tall{max-height:100%;}
+  }
   .app-modal-header{
     display:flex;
     align-items:center;
@@ -1019,25 +1036,94 @@
   }
 
   /* ---------- 管理主類別／子類別 ---------- */
+  .settings-hint{margin-bottom:2px !important;}
+  .cat-toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .cat-toolbar .cat-manual-row{
+    flex:1 1 200px;
+    margin-top:0;
+  }
+  .cat-toolbar > input{
+    flex:1 1 160px;
+    font-family:'Noto Sans TC', sans-serif;
+    font-size:13px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--paper);
+  }
+  .cat-manager-list{gap:4px;}
   .category-manager-group{
     display:flex;
     flex-direction:column;
-    gap:6px;
   }
   .category-manager-group + .category-manager-group{
-    margin-top:12px;
-    padding-top:12px;
+    margin-top:8px;
+    padding-top:8px;
     border-top:1px dashed var(--line);
   }
+  /* 主類別列本身就能點擊展開／收合子類別，不用額外一整行的「展開」按鈕，省掉一行高度 */
+  .cat-row-toggle{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    flex:1;
+    min-width:0;
+    background:none;
+    border:none;
+    padding:0;
+    margin:0;
+    font:inherit;
+    color:inherit;
+    cursor:pointer;
+    text-align:left;
+  }
+  .cat-row-toggle .cat-chevron{
+    flex:none;
+    width:12px;
+    text-align:center;
+    font-size:10px;
+    color:var(--ink-soft);
+    transition:transform .12s ease;
+  }
+  .cat-row-toggle:hover .loc-name{color:var(--ink); text-decoration:underline;}
   .category-manager-subs{
     display:flex;
     flex-direction:column;
-    gap:6px;
-    padding-left:16px;
+    gap:4px;
+    padding:6px 0 2px 18px;
   }
   .location-manager-row.sub{
     background:var(--paper-2);
+    padding:6px 9px;
   }
+  .location-manager-row.sub .loc-name{font-size:12px; color:var(--ink-soft);}
+  /* 圖示按鈕（編輯／搬移／刪除）取代文字按鈕，讓每一列更窄、視覺更輕 */
+  .loc-actions button.icon-btn{
+    padding:5px 9px;
+    font-size:13px;
+    line-height:1;
+    min-width:28px;
+    text-align:center;
+  }
+  /* 新增子類別預設收合成一個小連結，點了才展開輸入框，避免每個主類別展開後都多一整排輸入列 */
+  .sub-add-toggle{
+    align-self:flex-start;
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    padding:2px 0;
+    cursor:pointer;
+    text-decoration:underline dotted;
+  }
+  .sub-add-toggle:hover{color:var(--ink);}
+  .sub-add-row{margin-top:2px;}
+  .sub-add-row input{font-size:13px; padding:7px 9px;}
 
   /* ---------- 快速跳到管理區塊的按鈕（放在頁面最上方，避免使用者找不到） ---------- */
   #quickManageLinks{
@@ -1355,19 +1441,21 @@
 
 <!-- 管理主類別／子類別彈跳視窗 -->
 <div id="categoryModal" class="app-modal-backdrop">
-  <div class="app-modal-box">
+  <div class="app-modal-box tall">
     <div class="app-modal-header">
       <p class="card-title">🏷 管理主類別／子類別</p>
       <button type="button" class="app-modal-close" id="closeCategoryModalBtn">關閉 ✕</button>
     </div>
-    <div class="settings-body">
-      <p>新增、刪除、改名／搬移都會自動同步既有紀錄。也可以先建立還沒有任何紀錄的空類別，之後新增品項時就能直接點選，不用重打一次名稱。主類別是每筆紀錄的必填欄位，底下還有紀錄時無法直接刪除，請先用「編輯」把紀錄改到別的主類別。</p>
-      <div class="cat-manual-row" style="margin-top:2px;">
-        <input type="text" id="newMainCategoryInput" placeholder="輸入新主類別名稱" autocomplete="off">
-        <button type="button" id="newMainCategoryAddBtn">加入主類別</button>
+    <div class="settings-body cat-manager-body">
+      <p class="settings-hint">新增／刪除／改名／搬移都會自動同步紀錄；主類別為必填欄位，有紀錄使用中時請先搬移才能刪除。</p>
+      <div class="cat-toolbar">
+        <div class="cat-manual-row">
+          <input type="text" id="newMainCategoryInput" placeholder="新增主類別名稱" autocomplete="off">
+          <button type="button" id="newMainCategoryAddBtn">加入</button>
+        </div>
+        <input type="text" id="categoryManagerFilter" placeholder="🔍 搜尋主類別／子類別…" autocomplete="off">
       </div>
-      <input type="text" id="categoryManagerFilter" placeholder="搜尋主類別／子類別名稱…" autocomplete="off">
-      <div id="categoryManagerList" class="location-manager-list"></div>
+      <div id="categoryManagerList" class="location-manager-list cat-manager-list"></div>
       <div id="categoryManagerMsg" class="location-manager-msg"></div>
       <datalist id="categoryManagerDatalist"></datalist>
     </div>
@@ -2283,49 +2371,42 @@
       const expanded = expandedManagerCats.has(cat) || (!!term && subs.length > 0);
       const subsHtml = subs.map(sub => `
         <div class="location-manager-row sub" data-parent="${escapeHtml(cat)}" data-sub="${escapeHtml(sub)}">
-          <span class="loc-name">▸ ${escapeHtml(sub)}</span>
+          <span class="loc-name">↳ ${escapeHtml(sub)}</span>
           <span class="loc-count">${countItemsBySubCategory(cat, sub)}筆</span>
           <div class="loc-actions">
-            <button type="button" class="sub-edit-btn">編輯</button>
-            <button type="button" class="sub-move-btn">搬到…</button>
-            <button type="button" class="sub-remove-btn danger">刪除</button>
+            <button type="button" class="sub-edit-btn icon-btn" title="編輯">✎</button>
+            <button type="button" class="sub-move-btn icon-btn" title="搬到其他主類別">⇥</button>
+            <button type="button" class="sub-remove-btn icon-btn danger" title="刪除">✕</button>
           </div>
         </div>
       `).join("");
 
-      const addSubRowHtml = `
-        <div class="cat-manual-row sub-add-row" data-parent-add="${escapeHtml(cat)}" style="margin-top:4px;">
-          <input type="text" class="new-sub-input" placeholder="輸入新子類別名稱" autocomplete="off">
-          <button type="button" class="new-sub-add-btn">加入子類別</button>
-        </div>
-      `;
-
-      const toggleHtml = `<button type="button" class="sub-toggle cat-toggle-btn" data-cat="${escapeHtml(cat)}">${
-        expanded
-          ? (subs.length ? `▴ 收合 ${subs.length} 個子類別` : "▴ 收合")
-          : (subs.length ? `▾ 展開 ${subs.length} 個子類別` : "▾ 新增子類別")
-      }</button>`;
-
       return `
         <div class="category-manager-group" data-cat="${escapeHtml(cat)}">
           <div class="location-manager-row">
-            <span class="loc-name">${escapeHtml(cat)}</span>
-            <span class="loc-count">${countItemsByCategory(cat)}筆</span>
+            <button type="button" class="cat-row-toggle" data-cat="${escapeHtml(cat)}" title="展開／收合子類別">
+              <span class="cat-chevron">${expanded ? "▾" : "▸"}</span>
+              <span class="loc-name">${escapeHtml(cat)}</span>
+            </button>
+            <span class="loc-count">${countItemsByCategory(cat)}筆${subs.length ? `・${subs.length}個子類別` : ""}</span>
             <div class="loc-actions">
-              <button type="button" class="cat-edit-btn">編輯</button>
-              <button type="button" class="cat-del-btn danger">刪除</button>
+              <button type="button" class="cat-edit-btn icon-btn" title="編輯">✎</button>
+              <button type="button" class="cat-del-btn icon-btn danger" title="刪除">✕</button>
             </div>
           </div>
-          ${toggleHtml}
           <div class="category-manager-subs" style="display:${expanded ? "flex" : "none"};">
-            ${subs.length ? subsHtml : `<div class="leaderboard-sub-empty" style="padding-left:16px;">尚無子類別</div>`}
-            ${addSubRowHtml}
+            ${subs.length ? subsHtml : `<div class="leaderboard-sub-empty">尚無子類別</div>`}
+            <button type="button" class="sub-add-toggle" data-parent-add="${escapeHtml(cat)}">＋ 新增子類別</button>
+            <div class="cat-manual-row sub-add-row" data-parent-add="${escapeHtml(cat)}" style="display:none;">
+              <input type="text" class="new-sub-input" placeholder="輸入新子類別名稱" autocomplete="off">
+              <button type="button" class="new-sub-add-btn">加入</button>
+            </div>
           </div>
         </div>
       `;
     }).join("");
 
-    categoryManagerList.querySelectorAll(".cat-toggle-btn").forEach(btn => {
+    categoryManagerList.querySelectorAll(".cat-row-toggle").forEach(btn => {
       btn.addEventListener("click", () => {
         const cat = btn.dataset.cat;
         if(expandedManagerCats.has(cat)) expandedManagerCats.delete(cat);
@@ -2361,6 +2442,16 @@
       btn.addEventListener("click", () => {
         const row = btn.closest(".location-manager-row");
         removeSubCategoryTag(row.dataset.parent, row.dataset.sub);
+      });
+    });
+    // 新增子類別預設收合成一個小連結，點了才展開輸入框（就地切換，不重新整個列表，輸入焦點比較穩）
+    categoryManagerList.querySelectorAll(".sub-add-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const wrap = btn.closest(".category-manager-subs");
+        const row = wrap.querySelector(".sub-add-row");
+        const showing = row.style.display !== "none";
+        row.style.display = showing ? "none" : "flex";
+        if(!showing) row.querySelector(".new-sub-input").focus();
       });
     });
     categoryManagerList.querySelectorAll(".new-sub-add-btn").forEach(btn => {
