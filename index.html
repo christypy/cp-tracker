@@ -1194,7 +1194,8 @@
   <details id="categoryManager">
     <summary>🏷 管理主類別／子類別</summary>
     <div class="settings-body">
-      <p>重新命名主類別或子類別時，所有使用到的既有紀錄會自動一併同步更新。把子類別「搬到」別的主類別時，若該筆紀錄同時掛有其他子類別，會整筆一起搬過去（其他子類別不會被拆開）；「移除」則只會拿掉子類別標籤，紀錄本身跟主類別都不會被刪除或更動。</p>
+      <p>改名／搬移／移除都會自動同步既有紀錄。子類別預設收合，點類別下方的展開列可以看到底下的子類別。</p>
+      <input type="text" id="categoryManagerFilter" placeholder="搜尋主類別／子類別名稱…" autocomplete="off">
       <div id="categoryManagerList" class="location-manager-list"></div>
       <div id="categoryManagerMsg" class="location-manager-msg"></div>
       <datalist id="categoryManagerDatalist"></datalist>
@@ -1923,6 +1924,17 @@
   const categoryManagerList = $("categoryManagerList");
   const categoryManagerMsg = $("categoryManagerMsg");
   const categoryManagerDatalist = $("categoryManagerDatalist");
+  const categoryManagerFilterInput = $("categoryManagerFilter");
+  // 子類別預設收合，只記錄「使用者主動展開過」的主類別；搜尋時符合關鍵字的類別會強制展開
+  let expandedManagerCats = new Set();
+  let categoryManagerFilterTerm = "";
+
+  if(categoryManagerFilterInput){
+    categoryManagerFilterInput.addEventListener("input", (e) => {
+      categoryManagerFilterTerm = e.target.value.trim().toLowerCase();
+      renderCategoryManager();
+    });
+  }
 
   function countItemsByCategory(cat){
     return items.filter(i => !i.pending && i.category === cat).length;
@@ -1938,20 +1950,44 @@
     categoryManagerDatalist.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
   }
 
+  // 排序方式：CP 值排行榜是給「挑東西比價」用的，管理類別時比較想先看到「資料量最大」的類別方便抓大方向，
+  // 所以主類別／子類別都改成依「目前筆數」由多到少排序，筆數相同時再依名稱排序。
   function renderCategoryManager(){
     if(!categoryManagerList) return;
     renderCategoryManagerDatalist();
 
     const tree = buildCategoryTree();
-    const cats = Array.from(tree.keys()).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    let cats = Array.from(tree.keys());
+    cats.sort((a, b) => {
+      const diff = countItemsByCategory(b) - countItemsByCategory(a);
+      return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
+    });
+
+    const term = categoryManagerFilterTerm;
+    if(term){
+      cats = cats.filter(cat => {
+        if(cat.toLowerCase().includes(term)) return true;
+        return Array.from(tree.get(cat)).some(sub => sub.toLowerCase().includes(term));
+      });
+    }
 
     if(cats.length === 0){
-      categoryManagerList.innerHTML = `<div class="leaderboard-sub-empty">目前還沒有任何類別，請先在上方新增一筆紀錄</div>`;
+      categoryManagerList.innerHTML = `<div class="leaderboard-sub-empty">${term ? "沒有符合搜尋的類別" : "目前還沒有任何類別，請先在上方新增一筆紀錄"}</div>`;
       return;
     }
 
     categoryManagerList.innerHTML = cats.map(cat => {
-      const subs = Array.from(tree.get(cat)).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+      let subs = Array.from(tree.get(cat));
+      subs.sort((a, b) => {
+        const diff = countItemsBySubCategory(cat, b) - countItemsBySubCategory(cat, a);
+        return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
+      });
+      const catMatchesTerm = term && cat.toLowerCase().includes(term);
+      if(term && !catMatchesTerm){
+        subs = subs.filter(sub => sub.toLowerCase().includes(term));
+      }
+
+      const expanded = expandedManagerCats.has(cat) || (!!term && subs.length > 0);
       const subsHtml = subs.map(sub => `
         <div class="location-manager-row sub" data-parent="${escapeHtml(cat)}" data-sub="${escapeHtml(sub)}">
           <span class="loc-name">▸ ${escapeHtml(sub)}</span>
@@ -1963,6 +1999,11 @@
           </div>
         </div>
       `).join("");
+
+      const toggleHtml = subs.length
+        ? `<button type="button" class="sub-toggle cat-toggle-btn" data-cat="${escapeHtml(cat)}">${expanded ? `▴ 收合 ${subs.length} 個子類別` : `▾ 展開 ${subs.length} 個子類別`}</button>`
+        : `<div class="leaderboard-sub-empty" style="padding-left:16px;">尚無子類別</div>`;
+
       return `
         <div class="category-manager-group" data-cat="${escapeHtml(cat)}">
           <div class="location-manager-row">
@@ -1972,11 +2013,20 @@
               <button type="button" class="cat-edit-btn">編輯</button>
             </div>
           </div>
-          ${subs.length ? `<div class="category-manager-subs">${subsHtml}</div>` : `<div class="leaderboard-sub-empty" style="padding-left:16px;">尚無子類別</div>`}
+          ${toggleHtml}
+          ${subs.length ? `<div class="category-manager-subs" style="display:${expanded ? "flex" : "none"};">${subsHtml}</div>` : ""}
         </div>
       `;
     }).join("");
 
+    categoryManagerList.querySelectorAll(".cat-toggle-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cat = btn.dataset.cat;
+        if(expandedManagerCats.has(cat)) expandedManagerCats.delete(cat);
+        else expandedManagerCats.add(cat);
+        renderCategoryManager();
+      });
+    });
     categoryManagerList.querySelectorAll(".cat-edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const group = btn.closest(".category-manager-group");
