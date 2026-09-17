@@ -886,6 +886,41 @@
     min-height:14px;
   }
 
+  /* ---------- 管理主類別／子類別 ---------- */
+  details#categoryManager{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 18px;
+    margin-top:12px;
+  }
+  details#categoryManager summary{
+    cursor:pointer;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:.06em;
+  }
+  .category-manager-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .category-manager-group + .category-manager-group{
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+  }
+  .category-manager-subs{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    padding-left:16px;
+  }
+  .location-manager-row.sub{
+    background:var(--paper-2);
+  }
+
   footer{
     text-align:center;
     font-size:11px;
@@ -1115,6 +1150,16 @@
         <button type="button" id="newLocationAddBtn">加入</button>
       </div>
       <div id="locationManagerMsg" class="location-manager-msg"></div>
+    </div>
+  </details>
+
+  <details id="categoryManager">
+    <summary>🏷 管理主類別／子類別</summary>
+    <div class="settings-body">
+      <p>重新命名主類別或子類別時，所有使用到的既有紀錄會自動一併同步更新。把子類別「搬到」別的主類別時，若該筆紀錄同時掛有其他子類別，會整筆一起搬過去（其他子類別不會被拆開）；「移除」則只會拿掉子類別標籤，紀錄本身跟主類別都不會被刪除或更動。</p>
+      <div id="categoryManagerList" class="location-manager-list"></div>
+      <div id="categoryManagerMsg" class="location-manager-msg"></div>
+      <datalist id="categoryManagerDatalist"></datalist>
     </div>
   </details>
 
@@ -1834,6 +1879,331 @@
     });
   }
 
+  // ---------- 管理主類別／子類別 ----------
+  // 類別跟地點不一樣，沒有另外存一份「可管理清單」，完全就是從既有紀錄反推出來的樹狀結構
+  // （跟 buildCategoryTree() 同一套資料），所以這裡列出的一定是「目前實際有紀錄在用」的類別。
+  const categoryManagerList = $("categoryManagerList");
+  const categoryManagerMsg = $("categoryManagerMsg");
+  const categoryManagerDatalist = $("categoryManagerDatalist");
+
+  function countItemsByCategory(cat){
+    return items.filter(i => !i.pending && i.category === cat).length;
+  }
+
+  function countItemsBySubCategory(parent, sub){
+    return items.filter(i => !i.pending && i.category === parent && subCategoriesOf(i).includes(sub)).length;
+  }
+
+  function renderCategoryManagerDatalist(){
+    if(!categoryManagerDatalist) return;
+    const cats = Array.from(buildCategoryTree().keys()).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    categoryManagerDatalist.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
+  }
+
+  function renderCategoryManager(){
+    if(!categoryManagerList) return;
+    renderCategoryManagerDatalist();
+
+    const tree = buildCategoryTree();
+    const cats = Array.from(tree.keys()).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+    if(cats.length === 0){
+      categoryManagerList.innerHTML = `<div class="leaderboard-sub-empty">目前還沒有任何類別，請先在上方新增一筆紀錄</div>`;
+      return;
+    }
+
+    categoryManagerList.innerHTML = cats.map(cat => {
+      const subs = Array.from(tree.get(cat)).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+      const subsHtml = subs.map(sub => `
+        <div class="location-manager-row sub" data-parent="${escapeHtml(cat)}" data-sub="${escapeHtml(sub)}">
+          <span class="loc-name">▸ ${escapeHtml(sub)}</span>
+          <span class="loc-count">${countItemsBySubCategory(cat, sub)}筆</span>
+          <div class="loc-actions">
+            <button type="button" class="sub-edit-btn">編輯</button>
+            <button type="button" class="sub-move-btn">搬到…</button>
+            <button type="button" class="sub-remove-btn danger">移除</button>
+          </div>
+        </div>
+      `).join("");
+      return `
+        <div class="category-manager-group" data-cat="${escapeHtml(cat)}">
+          <div class="location-manager-row">
+            <span class="loc-name">${escapeHtml(cat)}</span>
+            <span class="loc-count">${countItemsByCategory(cat)}筆</span>
+            <div class="loc-actions">
+              <button type="button" class="cat-edit-btn">編輯</button>
+            </div>
+          </div>
+          ${subs.length ? `<div class="category-manager-subs">${subsHtml}</div>` : `<div class="leaderboard-sub-empty" style="padding-left:16px;">尚無子類別</div>`}
+        </div>
+      `;
+    }).join("");
+
+    categoryManagerList.querySelectorAll(".cat-edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const group = btn.closest(".category-manager-group");
+        startEditMainCategoryRow(group, group.dataset.cat);
+      });
+    });
+    categoryManagerList.querySelectorAll(".sub-edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".location-manager-row");
+        startEditSubCategoryRow(row, row.dataset.parent, row.dataset.sub);
+      });
+    });
+    categoryManagerList.querySelectorAll(".sub-move-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".location-manager-row");
+        startMoveSubCategoryRow(row, row.dataset.parent, row.dataset.sub);
+      });
+    });
+    categoryManagerList.querySelectorAll(".sub-remove-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".location-manager-row");
+        removeSubCategoryTag(row.dataset.parent, row.dataset.sub);
+      });
+    });
+  }
+
+  function startEditMainCategoryRow(group, oldCat){
+    const topRow = group.querySelector(".location-manager-row");
+    topRow.classList.add("editing");
+    topRow.innerHTML = `
+      <input type="text" class="loc-edit-input" value="${escapeHtml(oldCat)}">
+      <div class="loc-actions">
+        <button type="button" class="loc-confirm-btn">儲存</button>
+        <button type="button" class="loc-cancel-btn">取消</button>
+      </div>
+    `;
+    const input = topRow.querySelector(".loc-edit-input");
+    input.focus();
+    input.select();
+    const confirmEdit = () => renameMainCategory(oldCat, input.value.trim());
+    topRow.querySelector(".loc-confirm-btn").addEventListener("click", confirmEdit);
+    topRow.querySelector(".loc-cancel-btn").addEventListener("click", () => renderCategoryManager());
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); confirmEdit(); }
+      if(e.key === "Escape"){ e.preventDefault(); renderCategoryManager(); }
+    });
+  }
+
+  function startEditSubCategoryRow(row, parent, oldSub){
+    row.classList.add("editing");
+    row.innerHTML = `
+      <input type="text" class="loc-edit-input" value="${escapeHtml(oldSub)}">
+      <div class="loc-actions">
+        <button type="button" class="loc-confirm-btn">儲存</button>
+        <button type="button" class="loc-cancel-btn">取消</button>
+      </div>
+    `;
+    const input = row.querySelector(".loc-edit-input");
+    input.focus();
+    input.select();
+    const confirmEdit = () => renameSubCategory(parent, oldSub, input.value.trim());
+    row.querySelector(".loc-confirm-btn").addEventListener("click", confirmEdit);
+    row.querySelector(".loc-cancel-btn").addEventListener("click", () => renderCategoryManager());
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); confirmEdit(); }
+      if(e.key === "Escape"){ e.preventDefault(); renderCategoryManager(); }
+    });
+  }
+
+  function startMoveSubCategoryRow(row, parent, sub){
+    row.classList.add("editing");
+    row.innerHTML = `
+      <input type="text" class="loc-edit-input" list="categoryManagerDatalist" placeholder="輸入要搬到的主類別（可以是新的名稱）">
+      <div class="loc-actions">
+        <button type="button" class="loc-confirm-btn">搬移</button>
+        <button type="button" class="loc-cancel-btn">取消</button>
+      </div>
+    `;
+    const input = row.querySelector(".loc-edit-input");
+    input.focus();
+    const confirmMove = () => moveSubCategory(parent, sub, input.value.trim());
+    row.querySelector(".loc-confirm-btn").addEventListener("click", confirmMove);
+    row.querySelector(".loc-cancel-btn").addEventListener("click", () => renderCategoryManager());
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); confirmMove(); }
+      if(e.key === "Escape"){ e.preventDefault(); renderCategoryManager(); }
+    });
+  }
+
+  // 把類別異動同步寫回試算表裡每一筆受影響的既有紀錄（本地已先樂觀更新過畫面）
+  async function syncCategoryChangeToServer(affectedItems, doneLabel){
+    const real = affectedItems.filter(i => !i.pending && typeof i.row === "number");
+    let failCount = 0;
+    for(const item of real){
+      try{
+        const res = await fetch(scriptUrl, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},
+          body: JSON.stringify({
+            action: "update",
+            row: item.row,
+            name: item.name,
+            category: item.category,
+            subCategory: item.subCategory,
+            grams: item.grams,
+            price: item.price,
+            count: item.count,
+            unitPrice: item.unitPrice,
+            date: item.date,
+            location: item.location
+          })
+        });
+        const data = JSON.parse(await res.text());
+        if(data.status !== "ok") throw new Error(data.message || "更新失敗");
+      }catch(err){
+        failCount += 1;
+        item.uploadError = true;
+      }
+    }
+    renderTable();
+    if(failCount > 0){
+      categoryManagerMsg.textContent = `同步完成，但有 ${failCount} 筆更新失敗，請按 ↻ 重新整理確認`;
+      setSyncState("error", "部分紀錄同步失敗，請按 ↻ 重新整理確認");
+    } else if(real.length > 0){
+      categoryManagerMsg.textContent = doneLabel ? doneLabel(real.length) : `已同步 ${real.length} 筆既有紀錄`;
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+    }
+  }
+
+  // 重新命名主類別（若新名稱已經是別的主類別，等於把兩個主類別合併在一起）
+  function renameMainCategory(oldCat, newName){
+    if(!newName){
+      categoryManagerMsg.textContent = "主類別名稱不能留空";
+      renderCategoryManager();
+      return;
+    }
+    if(newName === oldCat){
+      renderCategoryManager();
+      return;
+    }
+    const affected = items.filter(i => i.category === oldCat);
+    const isMerge = buildCategoryTree().has(newName);
+    if(isMerge){
+      if(!confirm(`「${newName}」已經是現有的主類別，繼續會把「${oldCat}」的 ${affected.length} 筆紀錄合併進「${newName}」，確定嗎？`)){
+        renderCategoryManager();
+        return;
+      }
+    }
+
+    affected.forEach(i => { i.category = newName; i.updatedAt = Date.now(); });
+
+    if(activeCategory === oldCat){
+      activeCategory = newName;
+    } else {
+      const { parent, child } = splitCategoryPath(activeCategory);
+      if(parent === oldCat) activeCategory = joinCategoryPath(newName, child);
+    }
+
+    renderCategoryChips();
+    renderTable();
+    renderCategoryManager();
+
+    if(affected.length > 0){
+      categoryManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
+      setSyncState("syncing", "背景更新中…");
+      syncCategoryChangeToServer(affected, (n) => `已更名並同步 ${n} 筆紀錄`);
+    } else {
+      categoryManagerMsg.textContent = "已更新主類別名稱";
+    }
+  }
+
+  // 重新命名子類別（若這個主類別底下已經有同名子類別，會自動合併、不會出現重複標籤）
+  function renameSubCategory(parent, oldSub, newName){
+    if(!newName){
+      categoryManagerMsg.textContent = "子類別名稱不能留空，若要拿掉這個子類別請用「移除」按鈕";
+      renderCategoryManager();
+      return;
+    }
+    if(newName === oldSub){
+      renderCategoryManager();
+      return;
+    }
+    const affected = items.filter(i => i.category === parent && subCategoriesOf(i).includes(oldSub));
+
+    affected.forEach(i => {
+      const subs = subCategoriesOf(i).filter(s => s !== oldSub);
+      if(!subs.includes(newName)) subs.push(newName);
+      i.subCategory = subs.join(",");
+      i.updatedAt = Date.now();
+    });
+
+    if(activeCategory === joinCategoryPath(parent, oldSub)) activeCategory = joinCategoryPath(parent, newName);
+
+    renderCategoryChips();
+    renderTable();
+    renderCategoryManager();
+
+    if(affected.length > 0){
+      categoryManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
+      setSyncState("syncing", "背景更新中…");
+      syncCategoryChangeToServer(affected, (n) => `已更名並同步 ${n} 筆紀錄`);
+    } else {
+      categoryManagerMsg.textContent = "已更新子類別名稱";
+    }
+  }
+
+  // 把子類別搬到另一個主類別底下：簡化版做法——符合條件的紀錄整筆搬過去（該筆其他子類別跟著移動，不會被拆開）
+  function moveSubCategory(parent, sub, targetParent){
+    if(!targetParent){
+      categoryManagerMsg.textContent = "請輸入要搬到的主類別名稱";
+      renderCategoryManager();
+      return;
+    }
+    if(targetParent === parent){
+      renderCategoryManager();
+      return;
+    }
+    const affected = items.filter(i => i.category === parent && subCategoriesOf(i).includes(sub));
+    if(affected.length === 0){
+      renderCategoryManager();
+      return;
+    }
+
+    const mixedCount = affected.filter(i => subCategoriesOf(i).length > 1).length;
+    let msg = `確定要把「${parent} ▸ ${sub}」搬到「${targetParent}」嗎？\n共 ${affected.length} 筆紀錄的主類別會改成「${targetParent}」。`;
+    if(mixedCount > 0){
+      msg += `\n其中有 ${mixedCount} 筆同時掛有其他子類別，這些子類別會跟著整筆一起搬過去，不會被拆開成兩筆。`;
+    }
+    if(!confirm(msg)) return;
+
+    affected.forEach(i => { i.category = targetParent; i.updatedAt = Date.now(); });
+
+    if(activeCategory === joinCategoryPath(parent, sub)) activeCategory = joinCategoryPath(targetParent, sub);
+
+    renderCategoryChips();
+    renderTable();
+    renderCategoryManager();
+
+    categoryManagerMsg.textContent = `已搬移，正在同步 ${affected.length} 筆既有紀錄…`;
+    setSyncState("syncing", "背景更新中…");
+    syncCategoryChangeToServer(affected, (n) => `已搬移並同步 ${n} 筆紀錄`);
+  }
+
+  // 只移除子類別標籤本身，紀錄跟主類別都不會被刪除或更動
+  function removeSubCategoryTag(parent, sub){
+    const affected = items.filter(i => i.category === parent && subCategoriesOf(i).includes(sub));
+    if(affected.length === 0) return;
+    if(!confirm(`確定要移除子類別「${sub}」嗎？\n這 ${affected.length} 筆紀錄不會被刪除，只會拿掉這個子類別標籤（主類別仍維持「${parent}」）。`)) return;
+
+    affected.forEach(i => {
+      i.subCategory = subCategoriesOf(i).filter(s => s !== sub).join(",");
+      i.updatedAt = Date.now();
+    });
+
+    if(activeCategory === joinCategoryPath(parent, sub)) activeCategory = parent;
+
+    renderCategoryChips();
+    renderTable();
+    renderCategoryManager();
+
+    categoryManagerMsg.textContent = `已移除，正在同步 ${affected.length} 筆既有紀錄…`;
+    setSyncState("syncing", "背景更新中…");
+    syncCategoryChangeToServer(affected, (n) => `已移除並同步 ${n} 筆紀錄`);
+  }
+
   // ---------- 快速比價 Modal 邏輯 ----------
   const compareModal = $("compareModal");
   const modalItemName = $("modalItemName");
@@ -2450,6 +2820,7 @@
 
   function renderCategoryChips(){
     renderCategoryDatalists();
+    renderCategoryManager();
 
     const tree = buildCategoryTree();
     const parents = Array.from(tree.keys()).sort();
