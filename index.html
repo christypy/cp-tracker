@@ -2152,9 +2152,14 @@
   }
 
   function buildLocationOptions(selectEl, customEl){
-    // 收集所有出現過的地點（包含可管理清單、歷史紀錄）
+    // 收集所有出現過的地點（包含可管理清單、歷史紀錄），依使用次數由多到少排序，
+    // 常用的地點排前面比較好選；次數相同則依名稱排序，順序才會穩定不亂跳。
     const historyLocations = items.map(i => i.location).filter(Boolean);
-    const allLocations = Array.from(new Set([...manageableLocations, ...historyLocations]));
+    const allLocations = Array.from(new Set([...manageableLocations, ...historyLocations]))
+      .sort((a, b) => {
+        const diff = countItemsByLocation(b) - countItemsByLocation(a);
+        return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
+      });
 
     const currentVal = getLocationValue(selectEl, customEl);
 
