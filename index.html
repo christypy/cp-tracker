@@ -1362,23 +1362,8 @@
         <input type="date" id="itemDate">
       </div>
       <div class="field full">
-        <label for="itemLocation">購買地點</label>
-        <select id="itemLocation">
-          <option value="">-- 選擇購買地點 --</option>
-          <option value="全聯線上">全聯線上</option>
-          <option value="全聯">全聯</option>
-          <option value="家樂福線上">家樂福線上</option>
-          <option value="PChome">PChome</option>
-          <option value="MoMo">MoMo</option>
-          <option value="蝦皮">蝦皮</option>
-          <option value="LG生活">LG生活</option>
-          <option value="花王特賣">花王特賣</option>
-          <option value="康是美">康是美</option>
-          <option value="寶雅">寶雅</option>
-          <option value="寶雅線上">寶雅線上</option>
-          <option value="屈臣氏">屈臣氏</option>
-          <option value="自行輸入">自行輸入…</option>
-        </select>
+        <label>購買地點<span class="cat-field-hint">點擊即可選取，越常用的地點排越前面</span></label>
+        <div class="leaderboard-strip" id="itemLocation"></div>
         <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
       </div>
 
@@ -1523,10 +1508,8 @@
 
     <div id="modalSaveSection" style="display:none; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line);">
       <div class="field" style="margin-bottom:10px;">
-        <label for="modalLocation" id="modalSaveLabel">🎉 更划算！在哪裡找到這個價格？</label>
-        <select id="modalLocation">
-          <option value="">-- 選擇購買地點 --</option>
-        </select>
+        <label id="modalSaveLabel">🎉 更划算！在哪裡找到這個價格？</label>
+        <div class="leaderboard-strip" id="modalLocation"></div>
         <input type="text" id="modalLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
       </div>
       <button type="button" id="modalSaveBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:var(--green); color:var(--white); cursor:pointer; font-family:'Space Mono', monospace; font-size:13px; font-weight:700;">💾 儲存這筆更划算的紀錄</button>
@@ -2125,11 +2108,21 @@
   const modalLocationSelect = $("modalLocation");
   const modalLocationCustom = $("modalLocationCustom");
 
+  // 購買地點改用跟主類別一樣的「點擊即選」標籤按鈕，不再用下拉選單。
+  // selectEl 這裡是承載按鈕的 <div> 容器，沿用跟以前下拉選單一樣的 .value 屬性存放目前選取的地點，
+  // 這樣其他地方讀取／設定選取值的程式碼不用大改。
   function getLocationValue(selectEl, customEl){
     if(selectEl.value === "自行輸入"){
       return customEl.value.trim();
     }
-    return selectEl.value;
+    return selectEl.value || "";
+  }
+
+  // 依 selectEl.value 更新按鈕的選取樣式（active）
+  function syncLocationChipActive(selectEl){
+    selectEl.querySelectorAll(".leaderboard-chip").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.loc === selectEl.value);
+    });
   }
 
   function setLocationValue(selectEl, customEl, loc){
@@ -2137,9 +2130,10 @@
       selectEl.value = "";
       customEl.value = "";
       customEl.style.display = "none";
+      syncLocationChipActive(selectEl);
       return;
     }
-    const preset = Array.from(selectEl.options).some(o => o.value === loc && o.value !== "自行輸入");
+    const preset = (selectEl._locationOptions || []).includes(loc);
     if(preset){
       selectEl.value = loc;
       customEl.value = "";
@@ -2149,6 +2143,7 @@
       customEl.value = loc;
       customEl.style.display = "block";
     }
+    syncLocationChipActive(selectEl);
   }
 
   function buildLocationOptions(selectEl, customEl){
@@ -2162,20 +2157,36 @@
       });
 
     const currentVal = getLocationValue(selectEl, customEl);
+    selectEl._locationOptions = allLocations;
 
-    // 清空並重新建立選單
-    selectEl.innerHTML = '<option value="">-- 選擇購買地點 --</option>';
-    allLocations.forEach(loc => {
-      const opt = document.createElement("option");
-      opt.value = loc;
-      opt.textContent = loc;
-      selectEl.appendChild(opt);
+    // 重新建立按鈕清單，「自行輸入」固定排在最後
+    let chipsHtml = allLocations.map((loc, idx) => `
+      <button type="button" class="leaderboard-chip" data-loc="${escapeHtml(loc)}">
+        <span class="lb-rank mono">${idx + 1}</span>
+        <span class="lb-name">${escapeHtml(loc)}</span>
+      </button>
+    `).join("");
+    chipsHtml += `
+      <button type="button" class="leaderboard-chip" data-loc="自行輸入">
+        <span class="lb-name">自行輸入…</span>
+      </button>
+    `;
+    selectEl.innerHTML = chipsHtml;
+
+    selectEl.querySelectorAll(".leaderboard-chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const loc = btn.dataset.loc;
+        selectEl.value = loc;
+        if(loc === "自行輸入"){
+          customEl.style.display = "block";
+          customEl.focus();
+        } else {
+          customEl.style.display = "none";
+          customEl.value = "";
+        }
+        syncLocationChipActive(selectEl);
+      });
     });
-
-    const customOpt = document.createElement("option");
-    customOpt.value = "自行輸入";
-    customOpt.textContent = "自行輸入…";
-    selectEl.appendChild(customOpt);
 
     setLocationValue(selectEl, customEl, currentVal);
   }
@@ -2193,20 +2204,6 @@
       persistLocations();
     }
   }
-
-  function bindLocationToggle(selectEl, customEl){
-    selectEl.addEventListener("change", () => {
-      if(selectEl.value === "自行輸入"){
-        customEl.style.display = "block";
-        customEl.focus();
-      } else {
-        customEl.style.display = "none";
-        customEl.value = "";
-      }
-    });
-  }
-  bindLocationToggle(itemLocationSelect, itemLocationCustom);
-  bindLocationToggle(modalLocationSelect, modalLocationCustom);
 
   // ---------- 管理購買地點（新增／刪除／編輯，編輯或刪除會同步既有紀錄） ----------
   const locationManagerList = $("locationManagerList");
