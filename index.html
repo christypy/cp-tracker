@@ -1536,6 +1536,10 @@
     color:var(--ink-soft);
   }
   .p-badge.best{background:rgba(30,122,88,.12); color:var(--green);}
+  .p-spec{
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
   .p-foot{
     display:flex;
     align-items:baseline;
@@ -4306,6 +4310,7 @@
       <button type="button" class="p-card tier-${pending ? "gray" : band}${pending ? " pending" : ""}" data-row="${escapeHtml(String(item.row))}" ${pending ? "disabled" : 'title="點擊看詳細資訊"'}>
         <span class="p-name">${escapeHtml(item.name)}</span>
         <span class="p-badges">${badges.join("")}</span>
+        <span class="p-spec mono">${formatNum(item.grams)}g · $${formatNum(item.price)}${(item.count || 1) > 1 ? ` · ${item.count}入（單罐 $${formatNum(item.unitPrice)}）` : ""}</span>
         <span class="p-foot">
           <span class="p-cp mono">${item.cp.toFixed(3)}<small>$/g</small></span>
           <span class="p-rank mono">${rankText}</span>
