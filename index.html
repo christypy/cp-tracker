@@ -1109,6 +1109,30 @@
     min-width:28px;
     text-align:center;
   }
+  /* 排序用的上／下移按鈕：直向堆疊、放在每一列最前面，像一般管理介面常見的排序把手 */
+  .order-controls{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    flex:none;
+  }
+  .order-controls button{
+    width:20px;
+    height:15px;
+    padding:0;
+    line-height:1;
+    font-size:9px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .order-controls button:hover:not(:disabled){color:var(--ink); border-color:var(--ink);}
+  .order-controls button:disabled{opacity:.3; cursor:default;}
   /* 新增子類別預設收合成一個小連結，點了才展開輸入框，避免每個主類別展開後都多一整排輸入列 */
   .sub-add-toggle{
     align-self:flex-start;
@@ -1609,6 +1633,45 @@
   function persistCategories(){
     localStorage.setItem(LS_CATEGORIES_KEY, JSON.stringify(manageableCategories));
   }
+
+  // 主類別／子類別的「自訂排序」：使用者在管理畫面按上移／下移調整，會同步存回試算表的
+  // 「類別排序」分頁，這樣不同裝置、重新整理後排序都不會不見。還沒手動排過序的類別，
+  // 一律照原本的預設規則（依目前筆數多到少、同筆數再依名稱）排在後面。
+  const LS_CATEGORY_ORDER_CACHE_KEY = "cp_tracker_category_order_cache";
+  let categoryOrderState = { main: [], sub: {} };
+  try{
+    const cachedOrder = JSON.parse(localStorage.getItem(LS_CATEGORY_ORDER_CACHE_KEY) || "null");
+    if(cachedOrder && typeof cachedOrder === "object"){
+      categoryOrderState = {
+        main: Array.isArray(cachedOrder.main) ? cachedOrder.main : [],
+        sub: (cachedOrder.sub && typeof cachedOrder.sub === "object") ? cachedOrder.sub : {}
+      };
+    }
+  }catch(e){
+    categoryOrderState = { main: [], sub: {} };
+  }
+  function persistCategoryOrderLocal(){
+    localStorage.setItem(LS_CATEGORY_ORDER_CACHE_KEY, JSON.stringify(categoryOrderState));
+  }
+  // 把目前的排序整包送回 Google Apps Script，寫進試算表的「類別排序」分頁
+  function saveCategoryOrderToServer(){
+    persistCategoryOrderLocal();
+    if(!scriptUrl) return;
+    setSyncState("syncing", "同步排序中…");
+    fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ action: "saveCategoryOrder", order: categoryOrderState })
+    }).then(res => res.text()).then(text => {
+      let data;
+      try{ data = JSON.parse(text); }catch(parseErr){ throw new Error("回傳格式錯誤"); }
+      if(data.status !== "ok") throw new Error(data.message || "排序同步失敗");
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+    }).catch(err => {
+      setSyncState("error", "排序同步失敗：" + err.message);
+      if(categoryManagerMsg) categoryManagerMsg.textContent = "排序已在本機更新，但同步到試算表失敗：" + err.message;
+    });
+  }
   function addMainCategory(name){
     const c = String(name || "").trim();
     if(!c) return false;
@@ -1699,6 +1762,71 @@
       subCategoriesOf(i).forEach(c => tree.get(i.category).add(c));
     });
     return tree;
+  }
+
+  // 依「自訂排序」排出主類別清單：先照 categoryOrderState.main 裡記錄的順序排，
+  // 還沒被排過序的（新類別、或從沒手動調整過的舊類別）依筆數多到少、同筆數依名稱，補在最後面。
+  function orderedMainCategories(tree){
+    tree = tree || buildCategoryTree();
+    const all = Array.from(tree.keys());
+    const known = categoryOrderState.main.filter(c => all.includes(c));
+    const missing = all.filter(c => !known.includes(c));
+    missing.sort((a, b) => {
+      const diff = countItemsByCategory(b) - countItemsByCategory(a);
+      return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
+    });
+    return [...known, ...missing];
+  }
+
+  // 同上，但排某個主類別底下的子類別清單
+  function orderedSubCategories(parent, tree){
+    tree = tree || buildCategoryTree();
+    const all = Array.from(tree.get(parent) || []);
+    const savedOrder = categoryOrderState.sub[parent] || [];
+    const known = savedOrder.filter(s => all.includes(s));
+    const missing = all.filter(s => !known.includes(s));
+    missing.sort((a, b) => {
+      const diff = countItemsBySubCategory(parent, b) - countItemsBySubCategory(parent, a);
+      return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
+    });
+    return [...known, ...missing];
+  }
+
+  // 把主類別「目前實際顯示出來的順序」完整寫回 categoryOrderState，
+  // 這樣按上移／下移時才是在調整「完整順序」，而不是只調整剛好有資料的那幾筆
+  function materializeMainOrder(tree){
+    categoryOrderState.main = orderedMainCategories(tree);
+    return categoryOrderState.main;
+  }
+  function materializeSubOrder(parent, tree){
+    categoryOrderState.sub[parent] = orderedSubCategories(parent, tree);
+    return categoryOrderState.sub[parent];
+  }
+
+  // 上移／下移主類別：dir 為 -1（上移）或 +1（下移）
+  function moveMainCategoryOrder(cat, dir){
+    const tree = buildCategoryTree();
+    const order = materializeMainOrder(tree);
+    const idx = order.indexOf(cat);
+    const swapIdx = idx + dir;
+    if(idx === -1 || swapIdx < 0 || swapIdx >= order.length) return;
+    [order[idx], order[swapIdx]] = [order[swapIdx], order[idx]];
+    renderCategoryChips();
+    renderCategoryManager();
+    saveCategoryOrderToServer();
+  }
+
+  // 上移／下移子類別
+  function moveSubCategoryOrder(parent, sub, dir){
+    const tree = buildCategoryTree();
+    const order = materializeSubOrder(parent, tree);
+    const idx = order.indexOf(sub);
+    const swapIdx = idx + dir;
+    if(idx === -1 || swapIdx < 0 || swapIdx >= order.length) return;
+    [order[idx], order[swapIdx]] = [order[swapIdx], order[idx]];
+    renderCategoryChips();
+    renderCategoryManager();
+    saveCategoryOrderToServer();
   }
 
   // filterValue 為 "__all__"、單一主類別（例如「零食」）、或完整路徑（例如「零食/甜的」）
@@ -2351,46 +2479,50 @@
     categoryManagerDatalist.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
   }
 
-  // 排序方式：CP 值排行榜是給「挑東西比價」用的，管理類別時比較想先看到「資料量最大」的類別方便抓大方向，
-  // 所以主類別／子類別都改成依「目前筆數」由多到少排序，筆數相同時再依名稱排序。
+  // 排序方式：預設先照「自訂排序」（使用者按上移／下移調整過的順序）排；
+  // 還沒手動排過序的類別，依「目前筆數」由多到少排序，筆數相同時再依名稱排序，補在後面。
+  // 搜尋中為了避免「篩選後的第幾個」跟「實際完整順序中的第幾個」對不起來造成移動時跳位，
+  // 排序按鈕會先暫時停用，清空搜尋後才能繼續調整順序。
   function renderCategoryManager(){
     if(!categoryManagerList) return;
     renderCategoryManagerDatalist();
 
     const tree = buildCategoryTree();
-    let cats = Array.from(tree.keys());
-    cats.sort((a, b) => {
-      const diff = countItemsByCategory(b) - countItemsByCategory(a);
-      return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
-    });
+    const cats = orderedMainCategories(tree); // 完整順序（不受搜尋篩選影響），排序按鈕依這份清單判斷位置
 
     const term = categoryManagerFilterTerm;
-    if(term){
-      cats = cats.filter(cat => {
-        if(cat.toLowerCase().includes(term)) return true;
-        return Array.from(tree.get(cat)).some(sub => sub.toLowerCase().includes(term));
-      });
-    }
+    const visibleCats = term
+      ? cats.filter(cat => {
+          if(cat.toLowerCase().includes(term)) return true;
+          return Array.from(tree.get(cat)).some(sub => sub.toLowerCase().includes(term));
+        })
+      : cats;
 
-    if(cats.length === 0){
+    if(visibleCats.length === 0){
       categoryManagerList.innerHTML = `<div class="leaderboard-sub-empty">${term ? "沒有符合搜尋的類別" : "目前還沒有任何類別，請先在上方新增一筆紀錄"}</div>`;
       return;
     }
 
-    categoryManagerList.innerHTML = cats.map(cat => {
-      let subs = Array.from(tree.get(cat));
-      subs.sort((a, b) => {
-        const diff = countItemsBySubCategory(cat, b) - countItemsBySubCategory(cat, a);
-        return diff !== 0 ? diff : a.localeCompare(b, "zh-Hant");
-      });
+    categoryManagerList.innerHTML = visibleCats.map(cat => {
+      const catIdx = cats.indexOf(cat);
+      const subsFull = orderedSubCategories(cat, tree); // 該主類別底下子類別的完整順序
+      let subsVisible = subsFull;
       const catMatchesTerm = term && cat.toLowerCase().includes(term);
       if(term && !catMatchesTerm){
-        subs = subs.filter(sub => sub.toLowerCase().includes(term));
+        subsVisible = subsFull.filter(sub => sub.toLowerCase().includes(term));
       }
 
-      const expanded = expandedManagerCats.has(cat) || (!!term && subs.length > 0);
-      const subsHtml = subs.map(sub => `
+      const expanded = expandedManagerCats.has(cat) || (!!term && subsVisible.length > 0);
+      const subsHtml = subsVisible.map(sub => {
+        const subIdx = subsFull.indexOf(sub);
+        const subUpDisabled = term || subIdx <= 0;
+        const subDownDisabled = term || subIdx >= subsFull.length - 1;
+        return `
         <div class="location-manager-row sub" data-parent="${escapeHtml(cat)}" data-sub="${escapeHtml(sub)}">
+          <div class="order-controls">
+            <button type="button" class="sub-order-btn" data-move="up" ${subUpDisabled ? "disabled" : ""} title="子類別上移">▲</button>
+            <button type="button" class="sub-order-btn" data-move="down" ${subDownDisabled ? "disabled" : ""} title="子類別下移">▼</button>
+          </div>
           <span class="loc-name">↳ ${escapeHtml(sub)}</span>
           <span class="loc-count">${countItemsBySubCategory(cat, sub)}筆</span>
           <div class="loc-actions">
@@ -2399,23 +2531,31 @@
             <button type="button" class="sub-remove-btn icon-btn danger" title="刪除">✕</button>
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
+
+      const catUpDisabled = term || catIdx <= 0;
+      const catDownDisabled = term || catIdx >= cats.length - 1;
 
       return `
         <div class="category-manager-group" data-cat="${escapeHtml(cat)}">
           <div class="location-manager-row">
+            <div class="order-controls">
+              <button type="button" class="cat-order-btn" data-move="up" ${catUpDisabled ? "disabled" : ""} title="主類別上移">▲</button>
+              <button type="button" class="cat-order-btn" data-move="down" ${catDownDisabled ? "disabled" : ""} title="主類別下移">▼</button>
+            </div>
             <button type="button" class="cat-row-toggle" data-cat="${escapeHtml(cat)}" title="展開／收合子類別">
               <span class="cat-chevron">${expanded ? "▾" : "▸"}</span>
               <span class="loc-name">${escapeHtml(cat)}</span>
             </button>
-            <span class="loc-count">${countItemsByCategory(cat)}筆${subs.length ? `・${subs.length}個子類別` : ""}</span>
+            <span class="loc-count">${countItemsByCategory(cat)}筆${subsFull.length ? `・${subsFull.length}個子類別` : ""}</span>
             <div class="loc-actions">
               <button type="button" class="cat-edit-btn icon-btn" title="編輯">✎</button>
               <button type="button" class="cat-del-btn icon-btn danger" title="刪除">✕</button>
             </div>
           </div>
           <div class="category-manager-subs" style="display:${expanded ? "flex" : "none"};">
-            ${subs.length ? subsHtml : `<div class="leaderboard-sub-empty">尚無子類別</div>`}
+            ${subsVisible.length ? subsHtml : `<div class="leaderboard-sub-empty">尚無子類別</div>`}
             <button type="button" class="sub-add-toggle" data-parent-add="${escapeHtml(cat)}">＋ 新增子類別</button>
             <div class="cat-manual-row sub-add-row" data-parent-add="${escapeHtml(cat)}" style="display:none;">
               <input type="text" class="new-sub-input" placeholder="輸入新子類別名稱" autocomplete="off">
@@ -2432,6 +2572,20 @@
         if(expandedManagerCats.has(cat)) expandedManagerCats.delete(cat);
         else expandedManagerCats.add(cat);
         renderCategoryManager();
+      });
+    });
+    categoryManagerList.querySelectorAll(".cat-order-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if(btn.disabled) return;
+        const group = btn.closest(".category-manager-group");
+        moveMainCategoryOrder(group.dataset.cat, btn.dataset.move === "up" ? -1 : 1);
+      });
+    });
+    categoryManagerList.querySelectorAll(".sub-order-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if(btn.disabled) return;
+        const row = btn.closest(".location-manager-row");
+        moveSubCategoryOrder(row.dataset.parent, row.dataset.sub, btn.dataset.move === "up" ? -1 : 1);
       });
     });
     categoryManagerList.querySelectorAll(".cat-edit-btn").forEach(btn => {
@@ -2528,10 +2682,15 @@
     expandedManagerCats.delete(cat);
     if(activeCategory === cat) activeCategory = "__all__";
 
+    // 排序清單裡也把這個主類別（跟底下記錄過的子類別順序）一併清掉，避免留下指向不存在類別的殘留資料
+    categoryOrderState.main = categoryOrderState.main.filter(c => c !== cat);
+    delete categoryOrderState.sub[cat];
+
     categoryManagerMsg.textContent = `已刪除主類別「${cat}」`;
     renderCategoryChips();
     renderTable();
     renderCategoryManager();
+    saveCategoryOrderToServer();
   }
 
   function startEditMainCategoryRow(group, oldCat){
@@ -2660,6 +2819,23 @@
     affected.forEach(i => { i.category = newName; i.updatedAt = Date.now(); });
     managedRenameMain(oldCat, newName);
 
+    // 排序清單同步改名／合併：改名就把該位置的名字換掉；合併的話原本兩個位置只留新名稱那一個，
+    // 子類別排序清單也一併合併（保留原本各自記錄過的順序，新名稱底下沒排過的接在後面）。
+    const mIdx = categoryOrderState.main.indexOf(oldCat);
+    if(mIdx !== -1){
+      if(categoryOrderState.main.includes(newName)){
+        categoryOrderState.main.splice(mIdx, 1);
+      } else {
+        categoryOrderState.main[mIdx] = newName;
+      }
+    }
+    if(categoryOrderState.sub[oldCat]){
+      const mergedSubOrder = categoryOrderState.sub[newName] ? [...categoryOrderState.sub[newName]] : [];
+      categoryOrderState.sub[oldCat].forEach(s => { if(!mergedSubOrder.includes(s)) mergedSubOrder.push(s); });
+      categoryOrderState.sub[newName] = mergedSubOrder;
+      delete categoryOrderState.sub[oldCat];
+    }
+
     if(activeCategory === oldCat){
       activeCategory = newName;
     } else {
@@ -2670,6 +2846,7 @@
     renderCategoryChips();
     renderTable();
     renderCategoryManager();
+    saveCategoryOrderToServer();
 
     if(affected.length > 0){
       categoryManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
@@ -2701,11 +2878,24 @@
     });
     managedRenameSub(parent, oldSub, newName);
 
+    // 排序清單同步改名／合併
+    const subOrder = categoryOrderState.sub[parent] || [];
+    const sIdx = subOrder.indexOf(oldSub);
+    if(sIdx !== -1){
+      if(subOrder.includes(newName)){
+        subOrder.splice(sIdx, 1);
+      } else {
+        subOrder[sIdx] = newName;
+      }
+      categoryOrderState.sub[parent] = subOrder;
+    }
+
     if(activeCategory === joinCategoryPath(parent, oldSub)) activeCategory = joinCategoryPath(parent, newName);
 
     renderCategoryChips();
     renderTable();
     renderCategoryManager();
+    saveCategoryOrderToServer();
 
     if(affected.length > 0){
       categoryManagerMsg.textContent = `已更名，正在同步 ${affected.length} 筆既有紀錄…`;
@@ -2742,6 +2932,13 @@
 
     managedMoveSub(parent, sub, targetParent);
 
+    // 排序清單同步搬移：從原本主類別的子類別順序移除，接到目標主類別的子類別順序最後面
+    if(categoryOrderState.sub[parent]){
+      categoryOrderState.sub[parent] = categoryOrderState.sub[parent].filter(s => s !== sub);
+    }
+    if(!categoryOrderState.sub[targetParent]) categoryOrderState.sub[targetParent] = [];
+    if(!categoryOrderState.sub[targetParent].includes(sub)) categoryOrderState.sub[targetParent].push(sub);
+
     affected.forEach(i => {
       i.category = targetParent;
       // 搬走的這個子類別已經變成新的主類別本身，不用再留著同名的子類別標籤
@@ -2756,6 +2953,7 @@
     renderCategoryChips();
     renderTable();
     renderCategoryManager();
+    saveCategoryOrderToServer();
 
     if(affected.length > 0){
       categoryManagerMsg.textContent = `已搬移，正在同步 ${affected.length} 筆既有紀錄…`;
@@ -2777,6 +2975,11 @@
 
     managedRemoveSub(parent, sub);
 
+    // 排序清單也把這個子類別的順序紀錄拿掉
+    if(categoryOrderState.sub[parent]){
+      categoryOrderState.sub[parent] = categoryOrderState.sub[parent].filter(s => s !== sub);
+    }
+
     affected.forEach(i => {
       i.subCategory = subCategoriesOf(i).filter(s => s !== sub).join(",");
       i.updatedAt = Date.now();
@@ -2787,6 +2990,7 @@
     renderCategoryChips();
     renderTable();
     renderCategoryManager();
+    saveCategoryOrderToServer();
 
     if(affected.length > 0){
       categoryManagerMsg.textContent = `已刪除，正在同步 ${affected.length} 筆既有紀錄…`;
@@ -3114,6 +3318,13 @@
       const stillPending = items.filter(i => i.pending && uploadQueue.some(j => j.tempId === i.tempId));
       items = [...stillPending, ...serverItems];
       localStorage.setItem(LS_CACHE_KEY, JSON.stringify(serverItems));
+      if(data.categoryOrder && typeof data.categoryOrder === "object"){
+        categoryOrderState = {
+          main: Array.isArray(data.categoryOrder.main) ? data.categoryOrder.main : [],
+          sub: (data.categoryOrder.sub && typeof data.categoryOrder.sub === "object") ? data.categoryOrder.sub : {}
+        };
+        persistCategoryOrderLocal();
+      }
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
@@ -3481,7 +3692,7 @@
     renderCategoryManager();
 
     const tree = buildCategoryTree();
-    const parents = Array.from(tree.keys()).sort();
+    const parents = orderedMainCategories(tree);
     const activeInfo = splitCategoryPath(activeCategory === "__all__" ? "" : activeCategory);
     const activeParent = activeCategory === "__all__" ? "" : activeInfo.parent;
 
@@ -3505,7 +3716,7 @@
     // ---- 子類別列：只在選了某個主類別時顯示 ----
     childCategoryChips.innerHTML = "";
     if(activeParent && tree.has(activeParent)){
-      const children = Array.from(tree.get(activeParent)).sort();
+      const children = orderedSubCategories(activeParent, tree);
       children.forEach(c => {
         const fullPath = joinCategoryPath(activeParent, c);
         const chip = document.createElement("button");

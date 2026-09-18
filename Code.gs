@@ -30,6 +30,9 @@
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
 
+// 存放「主類別／子類別排序」的分頁，會在第一次用到時自動建立，不需要手動新增
+const CATEGORY_ORDER_SHEET_NAME = '類別排序';
+
 // 欄位固定順序（對應試算表由左到右的欄）
 const FIELD_ORDER = ['品項名稱', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
 
@@ -39,6 +42,77 @@ function getSheet_() {
     throw new Error('找不到分頁「' + SHEET_NAME + '」，請確認 SHEET_NAME 設定是否正確');
   }
   return sheet;
+}
+
+// 取得（或自動建立）存放類別排序的分頁
+// 欄位：層級（主／子）| 主類別 | 子類別（主類別這一列留空）| 排序（數字，愈小排愈前面）
+function getCategoryOrderSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CATEGORY_ORDER_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CATEGORY_ORDER_SHEET_NAME);
+    sheet.appendRow(['層級', '主類別', '子類別', '排序']);
+  }
+  return sheet;
+}
+
+// 讀出目前存在試算表裡的類別排序，整理成 { main: [主類別...], sub: { 主類別: [子類別...] } }
+function readCategoryOrder_() {
+  const sheet = getCategoryOrderSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { main: [], sub: {} };
+
+  values.shift(); // 標題列
+  const mainEntries = []; // [{name, order}]
+  const subEntries = {}; // { 主類別: [{name, order}] }
+
+  values.forEach(row => {
+    const level = String(row[0] || '').trim();
+    const main = String(row[1] || '').trim();
+    const sub = String(row[2] || '').trim();
+    const order = Number(row[3]);
+    if (!main) return;
+    if (level === '子' && sub) {
+      if (!subEntries[main]) subEntries[main] = [];
+      subEntries[main].push({ name: sub, order: isNaN(order) ? 0 : order });
+    } else if (!sub) {
+      mainEntries.push({ name: main, order: isNaN(order) ? 0 : order });
+    }
+  });
+
+  const main = mainEntries.sort((a, b) => a.order - b.order).map(e => e.name);
+  const sub = {};
+  Object.keys(subEntries).forEach(parent => {
+    sub[parent] = subEntries[parent].sort((a, b) => a.order - b.order).map(e => e.name);
+  });
+  return { main, sub };
+}
+
+// 把前端傳來的完整排序（{ main: [...], sub: { 主類別: [...] } }）整批覆寫回試算表
+function writeCategoryOrder_(order) {
+  const sheet = getCategoryOrderSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
+  }
+
+  const rows = [];
+  const mainList = Array.isArray(order && order.main) ? order.main : [];
+  mainList.forEach((name, idx) => {
+    rows.push(['主', String(name), '', idx]);
+  });
+
+  const subMap = (order && order.sub && typeof order.sub === 'object') ? order.sub : {};
+  Object.keys(subMap).forEach(parent => {
+    const subList = Array.isArray(subMap[parent]) ? subMap[parent] : [];
+    subList.forEach((name, idx) => {
+      rows.push(['子', String(parent), String(name), idx]);
+    });
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+  }
 }
 
 function jsonOut_(obj) {
@@ -72,7 +146,8 @@ function doGet(e) {
       obj._row = i + 2; // 對應到試算表的實際列號（用於刪除／編輯）
       items.push(obj);
     });
-    return jsonOut_({ status: 'ok', items });
+    const categoryOrder = readCategoryOrder_();
+    return jsonOut_({ status: 'ok', items, categoryOrder });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
@@ -106,6 +181,13 @@ function parseItemFields_(body) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+
+    // 儲存主／子類別的自訂排序（跟品項資料是不同分頁，這裡直接處理、不用碰到品項工作表）
+    if (body.action === 'saveCategoryOrder') {
+      writeCategoryOrder_(body.order || {});
+      return jsonOut_({ status: 'ok' });
+    }
+
     const sheet = getSheet_();
 
     if (body.action === 'delete') {
