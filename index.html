@@ -1174,6 +1174,114 @@
     color:var(--ink);
     border-color:var(--ink-soft);
   }
+  /* ---------- 組合商品分攤彈跳視窗 ---------- */
+  #comboModal .app-modal-box.wide{max-width:820px;}
+  .combo-hint{font-size:12.5px; color:var(--ink-soft); line-height:1.6; margin:0 0 14px;}
+  .combo-total-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-bottom:14px;
+  }
+  .combo-summary{
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin:4px 0 16px;
+    padding:8px 10px;
+    border:1px dashed var(--line);
+    border-radius:8px;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .combo-summary.balanced{color:var(--green); border-color:var(--green);}
+  .combo-summary.off{color:var(--red); border-color:var(--red);}
+  .combo-item-row{
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 14px 12px;
+    margin-bottom:14px;
+    background:var(--paper);
+  }
+  .combo-row-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .combo-row-head span{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+  }
+  .combo-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .combo-item-row .field.full{grid-column:1/-1;}
+  .combo-preview{
+    grid-column:1/-1;
+    font-family:'Space Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:2px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+  }
+  .combo-preview .locked-tag{color:var(--gold); font-weight:700;}
+  .combo-remove-btn, .combo-unlock-btn{
+    border:1px solid var(--line);
+    background:var(--white);
+    border-radius:6px;
+    font-size:11px;
+    padding:3px 8px;
+    cursor:pointer;
+    color:var(--ink-soft);
+    font-family:'Space Mono', monospace;
+  }
+  .combo-remove-btn:hover{color:var(--red); border-color:var(--red);}
+  .combo-unlock-btn:hover{color:var(--ink); border-color:var(--ink);}
+  #comboAddRowBtn, #comboUnlockAllBtn{
+    width:auto;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    font-size:12px;
+    border:1px dashed var(--line);
+    background:transparent;
+    border-radius:8px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    font-family:'Space Mono', monospace;
+    margin:0 8px 14px 0;
+  }
+  #comboAddRowBtn:hover, #comboUnlockAllBtn:hover{color:var(--ink); border-color:var(--ink);}
+  #comboSubmitBtn{
+    width:100%;
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size:15px;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    background:var(--ink);
+    color:var(--white);
+    cursor:pointer;
+    margin-top:6px;
+  }
+  #comboMsg{
+    font-size:12px;
+    text-align:center;
+    margin-top:10px;
+    min-height:16px;
+  }
+
   .app-modal-box.jump-highlight{
     animation:jumpFlash 1.4s ease;
   }
@@ -1690,6 +1798,7 @@
 </div>
 
 <div id="quickManageLinks">
+  <button type="button" id="jumpToComboModal">🧩 新增組合商品</button>
   <button type="button" id="jumpToCategoryManager">🏷 管理主類別／子類別</button>
   <button type="button" id="jumpToLocationManager">📍 管理購買地點</button>
   <button type="button" id="jumpToSettings">⚙ 設定同步網址</button>
@@ -1867,6 +1976,53 @@
       <button type="button" class="app-modal-close" id="closeDetailModalBtn">關閉 ✕</button>
     </div>
     <div id="detailModalBody"></div>
+  </div>
+</div>
+
+<!-- 組合商品分攤彈跳視窗（一次記錄多個不同品項合購的價格，自動分攤到每個品項） -->
+<div id="comboModal" class="app-modal-backdrop">
+  <div class="app-modal-box wide">
+    <div class="app-modal-header">
+      <p class="card-title">🧩 新增組合商品</p>
+      <button type="button" class="app-modal-close" id="closeComboModalBtn">關閉 ✕</button>
+    </div>
+    <div class="settings-body">
+      <p class="combo-hint">
+        一次買了好幾個不同品項的組合價，在這裡把每個品項列出來，總價會<strong>預設平均分攤</strong>到各品項；
+        如果知道某個品項單獨賣多少錢，可以填「原始單價」當參考，會改成照各品項的原價比例分攤（比平均分攤更準）。
+        也可以直接手動改「分攤金額」自己微調，改過的那筆會被鎖住，其餘品項自動分掉剩下的金額。
+      </p>
+
+      <form id="comboForm">
+        <div class="combo-total-row">
+          <div class="field">
+            <label for="comboTotalPrice">組合總價 ($)</label>
+            <input type="number" id="comboTotalPrice" inputmode="decimal" step="any" placeholder="例如 999" required>
+          </div>
+          <div class="field">
+            <label for="comboDate">日期</label>
+            <input type="date" id="comboDate">
+          </div>
+        </div>
+        <div class="field full" style="margin-bottom:14px;">
+          <label>購買地點<span class="cat-field-hint">全部品項共用同一個購買地點</span></label>
+          <div class="leaderboard-strip" id="comboLocation"></div>
+          <input type="text" id="comboLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
+        </div>
+
+        <div class="combo-summary" id="comboSummary">尚未輸入組合總價</div>
+
+        <div id="comboItemRows"></div>
+
+        <button type="button" id="comboAddRowBtn">＋ 新增一個品項</button>
+        <button type="button" id="comboUnlockAllBtn">🔄 全部改回自動分攤</button>
+
+        <datalist id="comboCategoryDatalist"></datalist>
+
+        <button type="submit" id="comboSubmitBtn">加入這組組合的所有品項</button>
+        <div id="comboMsg"></div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -3438,6 +3594,7 @@
   wireAppModal("locationModal", "closeLocationModalBtn");
   wireAppModal("categoryModal", "closeCategoryModalBtn");
   wireAppModal("detailModal", "closeDetailModalBtn");
+  wireAppModal("comboModal", "closeComboModalBtn");
   document.addEventListener("keydown", (e) => {
     if(e.key !== "Escape") return;
     document.querySelectorAll(".app-modal-backdrop.show").forEach(b => closeAppModal(b.id));
@@ -3473,6 +3630,10 @@
   }
   if(jumpToSettingsBtn){
     jumpToSettingsBtn.addEventListener("click", () => openAppModal("settingsModal"));
+  }
+  const jumpToComboModalBtn = $("jumpToComboModal");
+  if(jumpToComboModalBtn){
+    jumpToComboModalBtn.addEventListener("click", () => openComboModal());
   }
 
   // ---------- 快速比價 Modal 邏輯 ----------
@@ -3936,6 +4097,298 @@
 
     uploadQueue.push({ tempId, name, category, subCategory, grams, price, count, unitPrice, date, location });
     processQueue();
+  });
+
+  // ---------- 組合商品（一次買了好幾個不同品項的合購價，自動把總價分攤到每個品項再各自存一筆） ----------
+  // 分攤邏輯：
+  // 1. 預設「直接分攤」：組合總價平分給所有品項。
+  // 2. 只要每個「還沒被手動鎖住」的品項都填了原始單價（且數量>0），就改成照各品項
+  //    「原始單價 × 數量」的比例去分攤，比平分更貼近實際價值。只要有任何一筆沒填原始單價，
+  //    未鎖住的品項一律退回平分，避免半套比例算出奇怪的結果。
+  // 3. 使用者也可以直接改「分攤金額」欄位微調，改過的那筆會被鎖住（不再被自動分攤覆蓋），
+  //    剩下的金額則由其餘未鎖住的品項繼續依上面規則分攤，鎖住的加總一律不會超過組合總價的分配邏輯本身，
+  //    但如果使用者手動填的金額加起來超過總價，剩餘品項會分到 0，並在摘要列提示總額對不上。
+  const comboForm = $("comboForm");
+  const comboTotalPriceInput = $("comboTotalPrice");
+  const comboDateInput = $("comboDate");
+  const comboLocationSelect = $("comboLocation");
+  const comboLocationCustom = $("comboLocationCustom");
+  const comboItemRowsEl = $("comboItemRows");
+  const comboSummaryEl = $("comboSummary");
+  const comboMsgEl = $("comboMsg");
+  const comboCategoryDatalist = $("comboCategoryDatalist");
+
+  let comboRows = [];
+  let comboRowIdCounter = 0;
+
+  function newComboRow(){
+    comboRowIdCounter += 1;
+    return {
+      id: "cr" + comboRowIdCounter,
+      name: "", category: "", subCategory: "",
+      grams: "", count: 1, refPrice: "",
+      alloc: 0, locked: false
+    };
+  }
+
+  function comboRefreshCategoryDatalist(){
+    const cats = orderedMainCategories(buildCategoryTree());
+    comboCategoryDatalist.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join("");
+  }
+
+  function openComboModal(){
+    if(comboRows.length === 0){
+      comboRows.push(newComboRow(), newComboRow());
+    }
+    if(!comboDateInput.value){
+      comboDateInput.value = new Date().toISOString().slice(0, 10);
+    }
+    comboRefreshCategoryDatalist();
+    buildLocationOptions(comboLocationSelect, comboLocationCustom);
+    comboMsgEl.textContent = "";
+    renderComboRows();
+    recomputeComboAllocation();
+    openAppModal("comboModal");
+  }
+
+  function comboRowPreviewHtml(row){
+    const grams = parseFloat(row.grams);
+    const count = parseInt(row.count, 10) || 1;
+    const alloc = parseFloat(row.alloc) || 0;
+    let text = "單罐 --・CP --";
+    if(grams > 0){
+      const unitPrice = alloc / count;
+      const cp = alloc / (grams * count);
+      text = "單罐 $" + formatNum(unitPrice) + "・CP " + cp.toFixed(3) + " $/g";
+    }
+    if(row.locked) text += `<span class="locked-tag">🔒 已手動鎖定</span>`;
+    return text;
+  }
+
+  function renderComboRows(){
+    comboItemRowsEl.innerHTML = comboRows.map((row, idx) => `
+      <div class="combo-item-row" data-id="${row.id}">
+        <div class="combo-row-head">
+          <span>品項 ${idx + 1}</span>
+          ${comboRows.length > 1 ? `<button type="button" class="combo-remove-btn" data-action="remove">✕ 移除</button>` : ""}
+        </div>
+        <div class="combo-grid">
+          <div class="field full">
+            <label>品項名稱</label>
+            <input type="text" data-field="name" value="${escapeHtml(row.name)}" placeholder="例如 微晶3D速卸潔顏油">
+          </div>
+          <div class="field">
+            <label>主類別 <span style="color:var(--red);">*必填</span></label>
+            <input type="text" data-field="category" value="${escapeHtml(row.category)}" list="comboCategoryDatalist" placeholder="例如 保養">
+          </div>
+          <div class="field">
+            <label>子類別（選填，可用逗號分隔多個）</label>
+            <input type="text" data-field="subCategory" value="${escapeHtml(row.subCategory)}" placeholder="例如 卸妝,臉部">
+          </div>
+          <div class="field">
+            <label>單罐克數／容量 (g/ml)</label>
+            <input type="number" data-field="grams" inputmode="decimal" step="any" value="${row.grams}" placeholder="例如 150">
+          </div>
+          <div class="field">
+            <label>數量 (入/罐)</label>
+            <input type="number" data-field="count" inputmode="numeric" min="1" value="${row.count}" placeholder="例如 1">
+          </div>
+          <div class="field">
+            <label>原始單價（選填，參考用）</label>
+            <input type="number" data-field="refPrice" inputmode="decimal" step="any" value="${row.refPrice}" placeholder="單獨購買的原價">
+          </div>
+          <div class="field">
+            <label>分攤金額 ($)</label>
+            <input type="number" data-field="alloc" inputmode="decimal" step="any" value="${row.alloc.toFixed(2)}">
+          </div>
+          <div class="combo-preview" data-role="preview">${comboRowPreviewHtml(row)}</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // 只更新分攤金額與預覽文字，不重建整個 DOM，這樣使用者打字打到一半不會因為重繪而失焦
+  function refreshComboRowDisplays(){
+    comboRows.forEach(row => {
+      const rowEl = comboItemRowsEl.querySelector(`.combo-item-row[data-id="${row.id}"]`);
+      if(!rowEl) return;
+      const allocInput = rowEl.querySelector('[data-field="alloc"]');
+      if(allocInput && document.activeElement !== allocInput){
+        allocInput.value = (parseFloat(row.alloc) || 0).toFixed(2);
+      }
+      const preview = rowEl.querySelector('[data-role="preview"]');
+      if(preview) preview.innerHTML = comboRowPreviewHtml(row);
+    });
+  }
+
+  function recomputeComboAllocation(){
+    const total = parseFloat(comboTotalPriceInput.value) || 0;
+    const locked = comboRows.filter(r => r.locked);
+    const unlocked = comboRows.filter(r => !r.locked);
+    const lockedSum = locked.reduce((s, r) => s + (parseFloat(r.alloc) || 0), 0);
+    const remaining = Math.max(total - lockedSum, 0);
+
+    if(unlocked.length > 0){
+      const allRefFilled = unlocked.every(r => (parseFloat(r.refPrice) > 0) && ((parseInt(r.count, 10) || 0) > 0));
+      const weights = unlocked.map(r => allRefFilled
+        ? (parseFloat(r.refPrice) * (parseInt(r.count, 10) || 1))
+        : 1);
+      const sumW = weights.reduce((a, b) => a + b, 0) || 1;
+
+      let running = 0;
+      unlocked.forEach((r, idx) => {
+        let val;
+        if(idx === unlocked.length - 1){
+          val = remaining - running; // 最後一筆吸收四捨五入的零頭，確保加總剛好等於總價
+        } else {
+          val = Math.round((remaining * (weights[idx] / sumW)) * 100) / 100;
+          running += val;
+        }
+        r.alloc = Math.max(Math.round(val * 100) / 100, 0);
+      });
+    }
+
+    refreshComboRowDisplays();
+
+    const allocatedSum = comboRows.reduce((s, r) => s + (parseFloat(r.alloc) || 0), 0);
+    if(!(total > 0)){
+      comboSummaryEl.className = "combo-summary";
+      comboSummaryEl.textContent = "尚未輸入組合總價";
+    } else if(Math.abs(allocatedSum - total) < 0.01){
+      comboSummaryEl.className = "combo-summary balanced";
+      comboSummaryEl.textContent = `已分攤合計 $${formatNum(allocatedSum)} ／ 組合總價 $${formatNum(total)} ✓`;
+    } else {
+      comboSummaryEl.className = "combo-summary off";
+      comboSummaryEl.textContent = `已分攤合計 $${formatNum(allocatedSum)} ／ 組合總價 $${formatNum(total)}（手動鎖定的金額加起來已超過總價，其餘品項分不到錢，請調整）`;
+    }
+  }
+
+  comboTotalPriceInput.addEventListener("input", recomputeComboAllocation);
+
+  $("comboAddRowBtn").addEventListener("click", () => {
+    comboRows.push(newComboRow());
+    renderComboRows();
+    recomputeComboAllocation();
+  });
+
+  $("comboUnlockAllBtn").addEventListener("click", () => {
+    comboRows.forEach(r => { r.locked = false; });
+    recomputeComboAllocation();
+  });
+
+  comboItemRowsEl.addEventListener("input", (e) => {
+    const rowEl = e.target.closest(".combo-item-row");
+    if(!rowEl) return;
+    const row = comboRows.find(r => r.id === rowEl.dataset.id);
+    if(!row) return;
+    const field = e.target.dataset.field;
+    if(!field) return;
+
+    if(field === "alloc"){
+      row.alloc = parseFloat(e.target.value) || 0;
+      row.locked = true;
+      recomputeComboAllocation();
+      return;
+    }
+    if(field === "count"){
+      row.count = parseInt(e.target.value, 10) || 1;
+    } else {
+      row[field] = e.target.value;
+    }
+    recomputeComboAllocation();
+  });
+
+  comboItemRowsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="remove"]');
+    if(!btn) return;
+    const rowEl = btn.closest(".combo-item-row");
+    if(!rowEl) return;
+    comboRows = comboRows.filter(r => r.id !== rowEl.dataset.id);
+    renderComboRows();
+    recomputeComboAllocation();
+  });
+
+  comboForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if(!scriptUrl){
+      comboMsgEl.textContent = "請先設定同步網址";
+      comboMsgEl.style.color = "var(--red)";
+      return;
+    }
+    const total = parseFloat(comboTotalPriceInput.value);
+    if(!(total > 0)){
+      comboMsgEl.textContent = "請輸入組合總價";
+      comboMsgEl.style.color = "var(--red)";
+      return;
+    }
+    if(comboRows.length < 1){
+      comboMsgEl.textContent = "請至少新增一個品項";
+      comboMsgEl.style.color = "var(--red)";
+      return;
+    }
+    for(const row of comboRows){
+      const grams = parseFloat(row.grams);
+      const count = parseInt(row.count, 10) || 1;
+      if(!String(row.name || "").trim() || !String(row.category || "").trim() || !(grams > 0) || count < 1){
+        comboMsgEl.textContent = "請確認每個品項都填好「品項名稱／主類別／克數」";
+        comboMsgEl.style.color = "var(--red)";
+        return;
+      }
+    }
+    if(comboLocationSelect.value === "自行輸入" && !getLocationValue(comboLocationSelect, comboLocationCustom)){
+      comboMsgEl.textContent = "請輸入購買地點，或改選其他選項";
+      comboMsgEl.style.color = "var(--red)";
+      return;
+    }
+
+    const date = comboDateInput.value || "";
+    const location = getLocationValue(comboLocationSelect, comboLocationCustom);
+    saveCustomLocation(location);
+
+    comboRows.forEach(row => {
+      const name = String(row.name).trim();
+      const category = String(row.category).trim();
+      const subCategory = String(row.subCategory || "").trim();
+      const grams = parseFloat(row.grams);
+      const count = parseInt(row.count, 10) || 1;
+      const price = Math.max(parseFloat(row.alloc) || 0, 0);
+      const unitPrice = price / count;
+      const cp = price / (grams * count);
+
+      tempIdCounter += 1;
+      const tempId = "pending-" + tempIdCounter;
+
+      items.unshift({
+        row: tempId,
+        tempId: tempId,
+        name, category, subCategory, grams, price, count, unitPrice, cp, date, location,
+        pending: true,
+        uploadError: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+
+      uploadQueue.push({ tempId, name, category, subCategory, grams, price, count, unitPrice, date, location });
+    });
+
+    renderLocationOptions();
+    renderCategoryChips();
+    renderTable();
+    processQueue();
+
+    comboMsgEl.style.color = "var(--green)";
+    comboMsgEl.textContent = `✓ 已加入 ${comboRows.length} 筆紀錄，背景同步中…`;
+
+    comboRows = [newComboRow(), newComboRow()];
+    comboTotalPriceInput.value = "";
+    setLocationValue(comboLocationSelect, comboLocationCustom, "");
+    renderComboRows();
+    recomputeComboAllocation();
+
+    setTimeout(() => {
+      closeAppModal("comboModal");
+      comboMsgEl.textContent = "";
+    }, 1100);
   });
 
   // ---------- 編輯品項 ----------
