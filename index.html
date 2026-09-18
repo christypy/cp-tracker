@@ -1766,6 +1766,7 @@
         renderFormCategoryLeaderboard();
         renderChildCheckboxes();
         updateLiveRank();
+        syncListFilterToForm();
       });
     });
   }
@@ -1823,12 +1824,30 @@
     selectedSubCategories.push(c);
     renderChildCheckboxes();
     updateLiveRank();
+    syncListFilterToForm();
   }
 
   function removeSelectedSubCategory(name){
     selectedSubCategories = selectedSubCategories.filter(c => c !== name);
     renderChildCheckboxes();
     updateLiveRank();
+    syncListFilterToForm();
+  }
+
+  // 表單上點選主類別／子類別時，讓下方「產品列表」的篩選 chips 同步跟著切換，
+  // 這樣一邊選類別一邊就能立刻看到目前這個分類底下已經有哪些品項，方便比價、避免重複輸入。
+  // 規則：還沒選主類別就不動；選了主類別、還沒選子類別就篩選到該主類別；
+  // 若同時選了多個子類別，優先顯示「最後一個點的」子類別（跟使用者當下的動作一致）。
+  function syncListFilterToForm(){
+    if(!selectedParentCategory) return;
+    const target = selectedSubCategories.length
+      ? joinCategoryPath(selectedParentCategory, selectedSubCategories[selectedSubCategories.length - 1])
+      : selectedParentCategory;
+    if(activeCategory === target) return;
+    activeCategory = target;
+    currentPage = 0;
+    renderCategoryChips();
+    renderTable();
   }
 
   categoryParentManualBtn.addEventListener("click", () => {
@@ -1847,6 +1866,7 @@
     renderFormCategoryLeaderboard();
     renderChildCheckboxes();
     updateLiveRank();
+    syncListFilterToForm();
   }
 
   categoryParentManualAddBtn.addEventListener("click", addManualParentCategory);
