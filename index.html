@@ -1274,9 +1274,397 @@
     form#addForm{grid-template-columns:1fr 1fr 1fr;}
     .calc-grid{grid-template-columns:1fr 1fr 1fr;}
   }
+
+  /* ============================================================
+     UI v2 — 整體視覺改版 ＋ 產品列表（每個類別一次看完前／中／後段）
+     這一段放在最後，會覆蓋上面舊版的樣式設定
+     ============================================================ */
+
+  :root{
+    --paper:#EFF2ED;
+    --paper-2:#E5EAE3;
+    --line:#D8DFD5;
+    --ink:#18211C;
+    --ink-soft:#6C7A71;
+    --red:#C0473A;
+    --green:#1E7A58;
+    --amber:#C08A2E;
+    --gold:#B8912F;
+    --white:#FFFFFF;
+    --radius:18px;
+  }
+  body{
+    background:linear-gradient(180deg,#F8FAF7 0%, var(--paper) 340px, var(--paper) 100%);
+    background-image:none;
+    padding-bottom:40px;
+  }
+
+  /* ---- 卡片：拿掉吊牌打洞的裝飾，改成乾淨的圓角卡 ---- */
+  .tag-card::before{display:none;}
+  .tag-card{
+    padding:20px 18px 22px;
+    border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(24,33,28,.05), 0 18px 40px -30px rgba(24,33,28,.55);
+  }
+  .card-title{
+    font-family:'Noto Sans TC', sans-serif;
+    font-size:15px;
+    font-weight:900;
+    letter-spacing:0;
+    text-transform:none;
+    color:var(--ink);
+    text-align:left;
+    margin-bottom:16px;
+  }
+
+  /* ---- 頁首：縮小、靠左，把空間留給內容 ---- */
+  header{
+    max-width:880px;
+    margin:0 auto;
+    padding:24px 20px 6px;
+    text-align:left;
+  }
+  header .eyebrow{color:var(--green); letter-spacing:.2em; font-size:11px;}
+  header h1{font-size:clamp(23px,5.4vw,30px); margin:4px 0 2px;}
+  header p{font-size:12.5px;}
+
+  #syncStatus{margin-bottom:10px;}
+  #quickManageLinks{justify-content:flex-start; padding-bottom:0;}
+  #quickManageLinks button{border-style:solid; background:transparent;}
+
+  /* ---- 分頁切換：記一筆 / 產品列表 ---- */
+  #mainTabs{
+    max-width:880px;
+    margin:14px auto 0;
+    padding:0 16px;
+    display:flex;
+    gap:8px;
+  }
+  #mainTabs .tab-btn{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:12px 10px;
+    font-family:'Noto Sans TC', sans-serif;
+    font-size:14px;
+    font-weight:700;
+    color:var(--ink-soft);
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:999px;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  #mainTabs .tab-btn.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:#fff;
+  }
+  #mainTabs .tab-badge{
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    padding:1px 8px;
+    border-radius:999px;
+    background:var(--paper-2);
+    color:var(--ink-soft);
+  }
+  #mainTabs .tab-btn.active .tab-badge{background:rgba(255,255,255,.2); color:#fff;}
+
+  body[data-tab="list"] #addFormCard{display:none;}
+  body[data-tab="form"] #listSection{display:none;}
+  /* 編輯中的表單是固定在畫面下方的浮層，不管在哪個分頁都要看得到 */
+  #addFormCard.editing-mode{display:block !important;}
+
+  main{margin-top:14px;}
+
+  /* ---- 列表上方的篩選列：捲動時固定在卡片頂端 ---- */
+  #listSection .controls{
+    position:sticky;
+    top:0;
+    z-index:6;
+    background:var(--white);
+    padding:2px 0 10px;
+    margin-bottom:10px !important;
+    border-bottom:1px solid var(--line);
+  }
+  #sortToggleBtn{
+    background:var(--paper-2);
+    border-color:var(--paper-2);
+    color:var(--ink);
+    font-size:11px;
+  }
+  #searchInput{max-width:100%;}
+  #categoryStatsBar{margin-bottom:12px;}
+
+  .list-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 14px;
+    align-items:center;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .list-legend .lg{display:inline-flex; align-items:center; gap:5px;}
+
+  /* ---- 類別區塊 ---- */
+  .cat-section{
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:var(--white);
+    overflow:hidden;
+    margin-bottom:12px;
+  }
+  .cat-section-head{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:12px 14px;
+    background:var(--paper-2);
+    border:none;
+    font:inherit;
+    color:var(--ink);
+    text-align:left;
+    cursor:pointer;
+  }
+  .cat-section-head:hover{background:#DCE3D9;}
+  .cat-sec-chevron{
+    flex:none;
+    width:12px;
+    font-size:10px;
+    color:var(--ink-soft);
+  }
+  .cat-sec-name{
+    font-size:15px;
+    font-weight:900;
+    flex:none;
+    max-width:55%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .cat-sec-meta{
+    margin-left:auto;
+    font-size:11px;
+    color:var(--ink-soft);
+    text-align:right;
+  }
+  .cat-section.collapsed .cat-section-body{display:none;}
+
+  /* ---- 前／中／後段 ---- */
+  .band{padding:12px 12px 14px; border-top:1px dashed var(--line);}
+  .band:first-child{border-top:none;}
+  .band-head{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-bottom:9px;
+  }
+  .band-label{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  .band-green .band-label{color:var(--green);}
+  .band-amber .band-label{color:var(--amber);}
+  .band-red .band-label{color:var(--red);}
+  .band-gray .band-label{color:var(--ink-soft);}
+  .band-hint{
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  .band-count{
+    margin-left:auto;
+    font-size:11px;
+    color:var(--ink-soft);
+    background:var(--paper-2);
+    border-radius:999px;
+    padding:2px 9px;
+    flex:none;
+  }
+  .band-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+    gap:8px;
+  }
+
+  /* ---- 產品小卡：只留名稱＋CP值，詳細資訊點進去看 ---- */
+  .p-card{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    align-items:stretch;
+    text-align:left;
+    font:inherit;
+    color:var(--ink);
+    background:var(--white);
+    border:1px solid var(--line);
+    border-left:4px solid var(--line);
+    border-radius:12px;
+    padding:11px 12px;
+    cursor:pointer;
+    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .p-card:hover{
+    transform:translateY(-1px);
+    box-shadow:0 8px 20px -14px rgba(24,33,28,.6);
+    border-color:var(--ink-soft);
+  }
+  .p-card:active{transform:none;}
+  .p-card.tier-green{border-left-color:var(--green);}
+  .p-card.tier-amber{border-left-color:var(--amber);}
+  .p-card.tier-red{border-left-color:var(--red);}
+  .p-card.tier-gray{border-left-color:var(--line);}
+  .p-card.pending{opacity:.6; cursor:default;}
+  .p-name{
+    font-size:14.5px;
+    font-weight:700;
+    line-height:1.4;
+    word-break:break-word;
+  }
+  .p-badges{display:flex; flex-wrap:wrap; gap:4px;}
+  .p-badges:empty{display:none;}
+  .p-badge{
+    font-family:'Space Mono', monospace;
+    font-size:10px;
+    padding:2px 7px;
+    border-radius:999px;
+    background:var(--paper-2);
+    color:var(--ink-soft);
+  }
+  .p-badge.best{background:rgba(30,122,88,.12); color:var(--green);}
+  .p-foot{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    margin-top:auto;
+    padding-top:6px;
+    border-top:1px dashed var(--line);
+  }
+  .p-cp{font-size:17px; font-weight:700;}
+  .p-cp small{font-size:10px; font-weight:400; color:var(--ink-soft); margin-left:3px;}
+  .p-rank{margin-left:auto; font-size:11px; color:var(--ink-soft);}
+  .p-more{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-left:auto;
+  }
+
+  /* ---- 詳細資訊：點小卡後跳出 ---- */
+  #detailModal .app-modal-box{max-width:480px;}
+  .detail-head{
+    border-left:4px solid var(--line);
+    padding:2px 0 12px 12px;
+    margin-bottom:14px;
+    border-bottom:1px dashed var(--line);
+  }
+  .detail-head.tier-green{border-left-color:var(--green);}
+  .detail-head.tier-amber{border-left-color:var(--amber);}
+  .detail-head.tier-red{border-left-color:var(--red);}
+  .detail-name{font-size:19px; font-weight:900; line-height:1.35;}
+  .detail-cat{font-size:12px; color:var(--ink-soft); margin-top:3px;}
+  .detail-cp{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    margin-top:10px;
+  }
+  .detail-cp span{font-size:30px; font-weight:700; letter-spacing:-.02em;}
+  .detail-cp small{font-size:12px; color:var(--ink-soft);}
+  .detail-tier{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    margin-top:8px;
+  }
+  .detail-rank{font-size:11px; color:var(--ink-soft);}
+  .detail-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:8px;
+  }
+  .detail-grid > div{
+    background:var(--paper);
+    border-radius:10px;
+    padding:9px 10px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
+  }
+  .detail-grid span{font-size:10.5px; color:var(--ink-soft);}
+  .detail-grid strong{font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis;}
+  .detail-sub-title{
+    font-size:12px;
+    font-weight:700;
+    color:var(--ink-soft);
+    margin:16px 0 7px;
+  }
+  .variant-row{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 11px;
+    margin-bottom:6px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--white);
+    font:inherit;
+    color:var(--ink);
+    cursor:pointer;
+    font-size:12.5px;
+    text-align:left;
+  }
+  .variant-row:hover{border-color:var(--ink-soft);}
+  .variant-cp{margin-left:auto; font-weight:700; flex:none;}
+  .variant-loc{
+    font-size:11px;
+    color:var(--ink-soft);
+    flex:none;
+  }
+  .detail-actions{
+    display:flex;
+    gap:8px;
+    margin-top:18px;
+  }
+  .detail-actions button{
+    flex:1;
+    padding:11px 8px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    color:var(--ink);
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .detail-actions button:hover{border-color:var(--ink-soft);}
+  .detail-actions button.primary{background:var(--ink); border-color:var(--ink); color:#fff;}
+  .detail-actions button.danger{color:var(--red);}
+  .detail-actions button.danger:hover{border-color:var(--red);}
+
+  @media (max-width:560px){
+    .band-grid{grid-template-columns:1fr 1fr; gap:7px;}
+    .p-name{font-size:13.5px;}
+    .p-cp{font-size:16px;}
+    .cat-sec-name{font-size:14px;}
+    .detail-grid{grid-template-columns:repeat(2, 1fr);}
+    #mainTabs .tab-btn{font-size:13px; padding:11px 8px;}
+    header{padding:18px 16px 4px;}
+  }
+  @media (max-width:360px){
+    .band-grid{grid-template-columns:1fr;}
+  }
+
 </style>
 </head>
-<body>
+<body data-tab="form">
 
 <div id="editBackdrop"></div>
 
@@ -1303,7 +1691,10 @@
   <button type="button" id="jumpToSettings">⚙ 設定同步網址</button>
 </div>
 
-<button type="button" id="viewListFab" title="查看產品列表">📋 產品列表<span class="fab-count" id="fabCount">0</span></button>
+<nav id="mainTabs">
+  <button type="button" class="tab-btn active" data-tab="form">✍ 記一筆</button>
+  <button type="button" class="tab-btn" data-tab="list">📋 產品列表<span class="tab-badge" id="tabListCount">0</span></button>
+</nav>
 
 <main>
 
@@ -1384,7 +1775,7 @@
           <button class="chip active" data-cat="__all__">全部</button>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button id="sortToggleBtn" class="chip" title="切換排序方向">CP值 低→高 ↑</button>
+          <button id="sortToggleBtn" class="chip" title="切換每個類別內的排列方向">🔽 最划算優先</button>
           <input type="text" id="searchInput" placeholder="搜尋品項／類別／子類別…">
         </div>
       </div>
@@ -1393,23 +1784,16 @@
 
     <div id="categoryStatsBar"></div>
 
-    <!-- 表格 -->
-    <section class="receipt">
-      <div class="receipt-row head">
-        <div>品項 / 類別 (點擊名稱可比價)</div>
-        <div class="stats">
-          <div class="stat grams-col">克數</div>
-          <div class="stat price-col">總價</div>
-          <div class="stat count-col">數量</div>
-          <div class="stat">單罐價</div>
-        </div>
-        <div class="num">$ / g</div>
-        <div></div>
-      </div>
-      <div id="tableBody">
-        <div class="empty-state">載入中…</div>
-      </div>
-    </section>
+    <!-- 每個類別一次看完：前段／中段／後段，點卡片看詳細資訊 -->
+    <div class="list-legend">
+      <span class="lg"><span class="dot green"></span>前段 · 最划算</span>
+      <span class="lg"><span class="dot amber"></span>中段 · 普通</span>
+      <span class="lg"><span class="dot red"></span>後段 · 偏貴</span>
+      <span class="lg">👆 點任一產品看克數／價格／地點等詳細資訊</span>
+    </div>
+    <div id="tableBody">
+      <div class="empty-state">載入中…</div>
+    </div>
   </section>
 
 </main>
@@ -1468,6 +1852,17 @@
       <div id="categoryManagerMsg" class="location-manager-msg"></div>
       <datalist id="categoryManagerDatalist"></datalist>
     </div>
+  </div>
+</div>
+
+<!-- 產品詳細資訊彈窗（點列表小卡打開）-->
+<div id="detailModal" class="app-modal-backdrop">
+  <div class="app-modal-box narrow">
+    <div class="app-modal-header">
+      <p class="card-title">產品詳細資訊</p>
+      <button type="button" class="app-modal-close" id="closeDetailModalBtn">關閉 ✕</button>
+    </div>
+    <div id="detailModalBody"></div>
   </div>
 </div>
 
@@ -3038,19 +3433,29 @@
   wireAppModal("settingsModal", "closeSettingsModalBtn");
   wireAppModal("locationModal", "closeLocationModalBtn");
   wireAppModal("categoryModal", "closeCategoryModalBtn");
+  wireAppModal("detailModal", "closeDetailModalBtn");
   document.addEventListener("keydown", (e) => {
     if(e.key !== "Escape") return;
     document.querySelectorAll(".app-modal-backdrop.show").forEach(b => closeAppModal(b.id));
   });
 
-  // 懸浮按鈕：快速捲動到下方的產品列表（列表本身直接顯示在頁面上，不彈跳視窗）
-  const viewListFabBtn = $("viewListFab");
-  const listSectionEl = $("listSection");
-  if(viewListFabBtn && listSectionEl){
-    viewListFabBtn.addEventListener("click", () => {
-      listSectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  // 分頁切換：「記一筆」與「產品列表」分成兩個畫面，不用一路往下滑
+  const mainTabs = $("mainTabs");
+  function setTab(tab){
+    document.body.dataset.tab = tab;
+    if(mainTabs){
+      mainTabs.querySelectorAll(".tab-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.tab === tab);
+      });
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  if(mainTabs){
+    mainTabs.querySelectorAll(".tab-btn").forEach(b => {
+      b.addEventListener("click", () => setTab(b.dataset.tab));
     });
   }
+  setTab("form");
 
   // 最上方的「快速跳到管理彈窗」按鈕
   const jumpToCategoryManagerBtn = $("jumpToCategoryManager");
@@ -3745,8 +4150,6 @@
   const sortToggleBtn = $("sortToggleBtn");
   sortToggleBtn.addEventListener("click", () => {
     sortAsc = !sortAsc;
-    sortToggleBtn.textContent = sortAsc ? "CP值 低→高 ↑" : "CP值 高→低 ↓";
-    currentPage = 0;
     renderTable();
   });
 
@@ -3782,7 +4185,7 @@
   }
 
   // 懸浮按鈕上的數字：目前有效紀錄（不含還在背景上傳中的暫存項目）總筆數
-  const fabCountEl = $("fabCount");
+  const fabCountEl = $("tabListCount");
   function updateFabCount(){
     if(!fabCountEl) return;
     fabCountEl.textContent = items.filter(i => !i.pending).length;
@@ -3853,213 +4256,261 @@
     return subCategoriesOf(item).some(c => c.toLowerCase().includes(term));
   }
 
+  // ---------- 產品列表渲染（v2）----------
+  // 呈現方式：以「類別」為單位，一次把該類別底下的所有產品攤開，
+  // 依同類別 CP 值排名切成 前段（最划算）／中段／後段（偏貴）三區，
+  // 每張小卡只顯示品項名稱與 CP 值，詳細資訊（克數／總價／數量／單罐價／日期／地點）
+  // 點卡片之後在「詳細資訊」彈窗裡看。
+  let collapsedSections = new Set();
+
+  const BAND_META = {
+    green:{ label:"前段 · 最划算", hint:"這個類別最便宜的 1/3" },
+    amber:{ label:"中段 · 普通",   hint:"中間的 1/3" },
+    red:{   label:"後段 · 偏貴",   hint:"最貴的 1/3" },
+    gray:{  label:"資料太少",      hint:"這個類別還分不出前中後段" }
+  };
+
+  // 同品項（名稱相同、容量／入數／通路不同）合併成一組，用整組最划算的那一筆當代表
+  function buildNameGroups(arr){
+    const order = [], map = new Map();
+    arr.forEach(item => {
+      const key = String(item.name || "").trim().toLowerCase();
+      if(!map.has(key)){ map.set(key, []); order.push(key); }
+      map.get(key).push(item);
+    });
+    return order.map(key => {
+      const g = map.get(key).slice().sort((a, b) => a.cp - b.cp);
+      return { key, items: g, rep: g[0], bestCp: g[0].cp };
+    });
+  }
+
+  // 在同一個類別裡依 CP 值排名切三段；少於 3 筆就不分段
+  function bandOfIndex(idx, total){
+    if(total < 3) return "gray";
+    const p = idx / (total - 1);
+    if(p <= 1/3) return "green";
+    if(p <= 2/3) return "amber";
+    return "red";
+  }
+
+  function renderProductCard(group, band, rank, total){
+    const item = group.rep;
+    const pending = !!item.pending;
+    const variants = group.items.length;
+    const badges = [];
+    if(!pending && total > 1 && rank === 1) badges.push('<span class="p-badge best">🏆 最划算</span>');
+    if(variants > 1) badges.push(`<span class="p-badge">${variants} 種規格</span>`);
+    if(pending) badges.push('<span class="p-badge">⏳ 上傳中</span>');
+    const rankText = (!pending && total > 1) ? `#${rank}/${total}` : "";
+    return `
+      <button type="button" class="p-card tier-${pending ? "gray" : band}${pending ? " pending" : ""}" data-row="${escapeHtml(String(item.row))}" ${pending ? "disabled" : 'title="點擊看詳細資訊"'}>
+        <span class="p-name">${escapeHtml(item.name)}</span>
+        <span class="p-badges">${badges.join("")}</span>
+        <span class="p-foot">
+          <span class="p-cp mono">${item.cp.toFixed(3)}<small>$/g</small></span>
+          <span class="p-rank mono">${rankText}</span>
+        </span>
+      </button>`;
+  }
+
+  function renderSection(sec){
+    const pendingItems = sec.items.filter(i => i.pending);
+    const normal = sec.items.filter(i => !i.pending);
+    const groups = buildNameGroups(normal).sort((a, b) => a.bestCp - b.bestCp);
+    const total = groups.length;
+
+    const bands = { green:[], amber:[], red:[], gray:[] };
+    groups.forEach((g, idx) => {
+      bands[bandOfIndex(idx, total)].push({ g, rank: idx + 1 });
+    });
+
+    const order = sortAsc ? ["green", "amber", "red", "gray"] : ["red", "amber", "green", "gray"];
+    const bandsHtml = order.map(band => {
+      const arr = bands[band];
+      if(!arr.length) return "";
+      const entries = sortAsc ? arr : arr.slice().reverse();
+      const cards = entries.map(e => renderProductCard(e.g, band, e.rank, total)).join("");
+      return `
+        <div class="band band-${band}">
+          <div class="band-head">
+            <span class="dot ${band}"></span>
+            <span class="band-label">${BAND_META[band].label}</span>
+            <span class="band-hint">${BAND_META[band].hint}</span>
+            <span class="band-count mono">${arr.length}</span>
+          </div>
+          <div class="band-grid">${cards}</div>
+        </div>`;
+    }).join("");
+
+    const pendingHtml = pendingItems.length ? `
+      <div class="band band-gray">
+        <div class="band-head">
+          <span class="dot gray"></span>
+          <span class="band-label">⏳ 背景上傳中</span>
+          <span class="band-count mono">${pendingItems.length}</span>
+        </div>
+        <div class="band-grid">${buildNameGroups(pendingItems).map(g => renderProductCard(g, "gray", 0, 0)).join("")}</div>
+      </div>` : "";
+
+    const avg = normal.length ? (normal.reduce((s, i) => s + i.cp, 0) / normal.length) : 0;
+    const best = groups.length ? groups[0].bestCp : null;
+    const collapsed = collapsedSections.has(sec.id);
+    const meta = [`${sec.items.length} 筆`];
+    if(normal.length) meta.push(`平均 ${avg.toFixed(3)}`);
+    if(best !== null) meta.push(`最划算 ${best.toFixed(3)}`);
+
+    return `
+      <section class="cat-section${collapsed ? " collapsed" : ""}">
+        <button type="button" class="cat-section-head" data-sec="${escapeHtml(sec.id)}">
+          <span class="cat-sec-chevron">${collapsed ? "▸" : "▾"}</span>
+          <span class="cat-sec-name">${escapeHtml(sec.title)}</span>
+          <span class="cat-sec-meta mono">${meta.join(" · ")}</span>
+        </button>
+        <div class="cat-section-body">${pendingHtml}${bandsHtml}</div>
+      </section>`;
+  }
+
   function renderTable(){
     updateCategoryStatsBar();
     updateFabCount();
-
-    // 「全部」檢視預設依最近更新排序，排序按鈕（依 CP 值排序）只在篩選特定主類別時才有意義，
-    // 所以切到「全部」時先隱藏按鈕，避免文字跟實際排序方式對不上
     if(sortToggleBtn){
-      sortToggleBtn.style.display = (activeCategory === "__all__") ? "none" : "";
+      sortToggleBtn.textContent = sortAsc ? "🔽 最划算優先" : "🔼 最貴優先";
     }
 
-    let list = items.filter(i => {
-      const matchCat = categoryMatches(i, activeCategory);
-      const matchSearch = itemMatchesSearch(i, searchTerm);
-      return matchCat && matchSearch;
-    });
-
+    const list = items.filter(i => categoryMatches(i, activeCategory) && itemMatchesSearch(i, searchTerm));
     if(list.length === 0){
       tableBody.innerHTML = '<div class="empty-state">還沒有符合條件的紀錄</div>';
       return;
     }
 
-    const categoryMap = buildCategoryMap();
-
-    // ---- 依品項名稱分組：同個產品即使 ml/g 數或數量不同，也整合在一起方便比較 ----
-    const groupOrder = [];
-    const groupsMap = new Map();
-    list.forEach(item => {
-      const key = item.name.trim().toLowerCase();
-      if(!groupsMap.has(key)){
-        groupsMap.set(key, []);
-        groupOrder.push(key);
-      }
-      groupsMap.get(key).push(item);
-    });
-
-    const groups = groupOrder.map(key => {
-      const arr = groupsMap.get(key).slice().sort((a,b) => a.cp - b.cp); // 組內固定依 CP 值由低到高，方便比價
-
-      // 代表項目：直接取整組中 CP 值最划算的那一筆（不論入數）
-      const rep = arr[0];
-      const others = arr.filter(i => i !== rep);
-      // 這組最近的一次新增／編輯時間，用於「全部」預設檢視依最近更新排序
-      const latestUpdatedAt = Math.max(...arr.map(i => i.updatedAt || i.createdAt || 0));
-
-      return { key, items: arr, rep, others, bestCp: arr[0].cp, latestUpdatedAt };
-    });
-
-    // 「全部」檢視預設依最近新增／編輯時間排序（越新越前面），方便馬上看到剛加入或剛改過的紀錄；
-    // 一旦點擊切換到特定主類別，才改用 CP 值排序方便比價（依排序按鈕的方向）
+    // 「全部」檢視：一個主類別一個區塊；選了某個類別／子類別：就只有那一個區塊
+    let sections;
     if(activeCategory === "__all__"){
-      groups.sort((a, b) => b.latestUpdatedAt - a.latestUpdatedAt);
+      const tree = buildCategoryTree();
+      const parents = orderedMainCategories(tree);
+      const byCat = new Map();
+      list.forEach(i => {
+        const cat = i.category || "未分類";
+        if(!byCat.has(cat)) byCat.set(cat, []);
+        byCat.get(cat).push(i);
+      });
+      const ordered = [];
+      parents.forEach(p => { if(byCat.has(p)) ordered.push(p); });
+      Array.from(byCat.keys()).forEach(c => { if(ordered.indexOf(c) === -1) ordered.push(c); });
+      sections = ordered.map(cat => ({ id: "cat:" + cat, title: cat, items: byCat.get(cat) }));
     } else {
-      groups.sort((a, b) => sortAsc ? a.bestCp - b.bestCp : b.bestCp - a.bestCp);
+      const { parent, child } = splitCategoryPath(activeCategory);
+      sections = [{
+        id: "cat:" + activeCategory,
+        title: child ? `${parent} ▸ ${child}` : parent,
+        items: list
+      }];
     }
 
-    // 清單分頁：依裝置螢幕寬度決定每頁筆數（手機螀幕較窄，一頁只放 5 筆以內；
-    // 平板／桌機畫面比較寬，可以放多一點），用左右按鈕切換頁面，不用一路往下滑。
-    function getPageSize(){
-      const w = window.innerWidth;
-      if(w <= 560) return 5;
-      if(w <= 900) return 8;
-      return 10;
-    }
-    const pageSize = getPageSize();
-    const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
-    if(currentPage >= totalPages) currentPage = totalPages - 1;
-    if(currentPage < 0) currentPage = 0;
-    const groupsToRender = groups.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+    tableBody.innerHTML = sections.map(renderSection).join("");
 
-    function renderRow(item, opts){
-      const { isRep, multi, isBestOfGroup, sub } = opts;
-      let tier;
-      if(item.pending){
-        tier = "gray";
-      } else {
-        // 不再顯示排名數字，紅黃綠燈是唯一的划算程度依據：一律用同一個類別分組計算
-        const cat = itemPrimaryCategoryPath(item);
-        const sameCategory = cat ? (categoryMap.get(cat) || []) : [];
-        tier = tierFor(item, sameCategory);
-      }
-
-      // 紅黃綠燈：一眼判斷划不划算，不再顯示排名數字
-      const TIER_LABELS = { green:"划算", amber:"普通", red:"偏貴" };
-      const tierTag = (TIER_LABELS[tier] && !item.pending)
-        ? `<span class="tier-tag tier-${tier}" title="跟同類別/同品項中最划算的比較：綠色划算、黃色普通、紅色偏貴"><span class="dot ${tier}"></span>${TIER_LABELS[tier]}</span>`
-        : "";
-      const bestBadge = (isBestOfGroup && !item.pending) ? `<span class="best-badge">🏆 ${isRep ? "最划算代表" : "組內最划算"}</span>` : "";
-      const convertedBadge = (isRep && multi && (item.count || 1) > 1)
-        ? `<span class="best-badge" title="換算成單一件（1入）在同樣克數/毫升下的價格">・換算1入：$${formatNum(item.unitPrice)}／${formatNum(item.grams)}g</span>`
-        : "";
-      const rowClass = "receipt-row" + (item.pending ? " pending" : "") + (multi ? " grouped" : "") + (sub ? " sub-row" : "") + ` tier-${tier}`;
-      const dateBadge = item.date ? `<span class="date-badge">📅 ${escapeHtml(formatDateOnly(item.date))}</span>` : "";
-      const locationBadge = item.location ? `<span class="date-badge">${escapeHtml(item.location)}</span>` : "";
-      const itemSubs = subCategoriesOf(item);
-      const catBadges = item.category
-        ? `<span class="cat-badge">${escapeHtml(item.category)}${itemSubs.length ? ` ▸ ${itemSubs.map(escapeHtml).join("、")}` : ""}</span>`
-        : "";
-      const actions = item.pending
-        ? (item.uploadError
-            ? `<button class="del" data-row="${item.tempId}" title="上傳失敗，點擊移除">⚠</button>`
-            : `<span class="pending-label" title="背景上傳中">⏳</span>`)
-        : `<div class="row-actions">
-             <button class="edit" data-row="${item.row}" title="編輯">✎</button>
-             <button class="del" data-row="${item.row}" title="刪除">✕</button>
-           </div>`;
-      return `
-        <div class="${rowClass}">
-          <div class="name name-clickable" data-row="${item.row}" title="點擊進行快速比價">
-            <span class="item-name-text">${escapeHtml(item.name)}</span> ${bestBadge}${convertedBadge}${tierTag}
-            <span class="cat-badge-group">${catBadges}</span>
-            ${dateBadge}
-            ${locationBadge}
-          </div>
-          <div class="stats">
-            <div class="stat grams-col mono"><span class="stat-label">克數</span><span class="stat-val">${formatNum(item.grams)}g</span></div>
-            <div class="stat price-col mono"><span class="stat-label">總價</span><span class="stat-val">$${formatNum(item.price)}</span></div>
-            <div class="stat count-col mono"><span class="stat-label">數量</span><span class="stat-val">${item.count}入</span></div>
-            <div class="stat mono"><span class="stat-label">單罐價</span><span class="stat-val">$${formatNum(item.unitPrice)}</span></div>
-          </div>
-          <div class="cp-cell">
-            <span class="stat-label mono">$/g</span>
-            <span class="dot ${tier}"></span>
-            <span class="cp-val mono">${item.cp.toFixed(3)}</span>
-          </div>
-          ${actions}
-        </div>
-      `;
-    }
-
-    tableBody.innerHTML = groupsToRender.map(group => {
-      const { key, items: arr, rep, others } = group;
-      const multi = arr.length > 1;
-      const groupHeader = multi
-        ? `<div class="group-header">📦 ${escapeHtml(arr[0].name)} · 共 ${arr.length} 種容量／數量／通路，預設顯示整組最划算的紀錄（多入會換算成1入價格）</div>`
-        : "";
-
-      const repRow = renderRow(rep, { isRep: true, multi, isBestOfGroup: true, sub: false });
-
-      let othersHtml = "";
-      if(others.length){
-        const expanded = expandedGroups.has(key);
-        const toggleLabel = expanded
-          ? `▴ 收合其他 ${others.length} 種容量／數量`
-          : `▾ 查看其他 ${others.length} 種容量／數量／通路`;
-        const subRows = others.map(item => renderRow(item, { isRep: false, multi, isBestOfGroup: false, sub: true })).join("");
-        othersHtml = `
-          <button type="button" class="sub-toggle" data-group="${escapeHtml(key)}">${toggleLabel}</button>
-          <div class="sub-items" style="display:${expanded ? "block" : "none"};">${subRows}</div>
-        `;
-      }
-
-      return `<div class="group-block">${groupHeader}${repRow}${othersHtml}</div>`;
-    }).join("");
-
-    const pagerHtml = totalPages > 1 ? `
-      <div class="list-pager">
-        <button type="button" id="pagerPrevBtn" class="pager-btn" ${currentPage === 0 ? "disabled" : ""}>◀ 上一頁</button>
-        <span class="pager-status mono">第 ${currentPage + 1} / ${totalPages} 頁・共 ${groups.length} 筆</span>
-        <button type="button" id="pagerNextBtn" class="pager-btn" ${currentPage >= totalPages - 1 ? "disabled" : ""}>下一頁 ▶</button>
-      </div>
-    ` : "";
-
-    tableBody.innerHTML += pagerHtml;
-
-    tableBody.querySelectorAll(".del").forEach(btn => {
-      btn.addEventListener("click", () => deleteItem(btn.dataset.row));
-    });
-    tableBody.querySelectorAll(".edit").forEach(btn => {
+    tableBody.querySelectorAll(".cat-section-head").forEach(btn => {
       btn.addEventListener("click", () => {
-        const item = items.find(i => String(i.row) === btn.dataset.row);
-        if(item) startEdit(item);
-      });
-    });
-    tableBody.querySelectorAll(".name-clickable").forEach(el => {
-      el.addEventListener("click", () => {
-        const item = items.find(i => String(i.row) === el.dataset.row);
-        if(item) openCompareModal(item);
-      });
-    });
-    tableBody.querySelectorAll(".sub-toggle[data-group]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const key = btn.dataset.group;
-        if(expandedGroups.has(key)) expandedGroups.delete(key);
-        else expandedGroups.add(key);
+        const id = btn.dataset.sec;
+        if(collapsedSections.has(id)) collapsedSections.delete(id);
+        else collapsedSections.add(id);
         renderTable();
       });
     });
-    const pagerPrevBtn = $("pagerPrevBtn");
-    const pagerNextBtn = $("pagerNextBtn");
-    if(pagerPrevBtn){
-      pagerPrevBtn.addEventListener("click", () => {
-        if(currentPage > 0){
-          currentPage -= 1;
-          renderTable();
-          tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      });
+    tableBody.querySelectorAll(".p-card:not(.pending)").forEach(btn => {
+      btn.addEventListener("click", () => openDetailModal(btn.dataset.row));
+    });
+  }
+
+  // ---------- 詳細資訊彈窗（點產品小卡才打開）----------
+  let detailRow = null;
+
+  function openDetailModal(row){
+    detailRow = row;
+    if(!renderDetail()) return;
+    openAppModal("detailModal");
+  }
+
+  function renderDetail(){
+    const body = $("detailModalBody");
+    const item = items.find(i => String(i.row) === String(detailRow));
+    if(!body) return false;
+    if(!item){
+      closeAppModal("detailModal");
+      return false;
     }
-    if(pagerNextBtn){
-      pagerNextBtn.addEventListener("click", () => {
-        if(currentPage < totalPages - 1){
-          currentPage += 1;
-          renderTable();
-          tableBody.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+
+    const categoryMap = buildCategoryMap();
+    const catPath = itemPrimaryCategoryPath(item);
+    const sameCategory = catPath ? (categoryMap.get(catPath) || []) : [];
+    const tier = tierFor(item, sameCategory);
+    const sortedCat = sameCategory.slice().sort((a, b) => a.cp - b.cp);
+    const rank = sortedCat.indexOf(item) + 1;
+    const TIER_LABELS = { green:"前段 · 划算", amber:"中段 · 普通", red:"後段 · 偏貴", gray:"同類別紀錄太少" };
+
+    const subs = subCategoriesOf(item);
+    const nameKey = String(item.name || "").trim().toLowerCase();
+    const variants = items
+      .filter(i => !i.pending && String(i.name || "").trim().toLowerCase() === nameKey && String(i.row) !== String(item.row))
+      .sort((a, b) => a.cp - b.cp);
+
+    const variantsHtml = variants.length ? `
+      <div class="detail-sub-title">同品項的其他容量／數量／通路（${variants.length}）· 點擊可切換</div>
+      ${variants.map(v => `
+        <button type="button" class="variant-row" data-row="${escapeHtml(String(v.row))}">
+          <span class="mono">${formatNum(v.grams)}g · ${v.count || 1}入 · $${formatNum(v.price)}</span>
+          ${v.location ? `<span class="variant-loc">${escapeHtml(v.location)}</span>` : ""}
+          <span class="mono variant-cp">${v.cp.toFixed(3)}</span>
+        </button>`).join("")}
+    ` : "";
+
+    body.innerHTML = `
+      <div class="detail-head tier-${tier}">
+        <div class="detail-name">${escapeHtml(item.name)}</div>
+        <div class="detail-cat">${escapeHtml(item.category || "未分類")}${subs.length ? " ▸ " + subs.map(escapeHtml).join("、") : ""}</div>
+        <div class="detail-cp"><span class="mono">${item.cp.toFixed(3)}</span><small>$ / g(ml)</small></div>
+        <div class="detail-tier">
+          <span class="tier-tag tier-${tier}"><span class="dot ${tier}"></span>${TIER_LABELS[tier]}</span>
+          ${(rank > 0 && sortedCat.length > 1) ? `<span class="detail-rank mono">同類別第 ${rank} / ${sortedCat.length} 名</span>` : ""}
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div><span>克數／毫升</span><strong class="mono">${formatNum(item.grams)}g</strong></div>
+        <div><span>總價</span><strong class="mono">$${formatNum(item.price)}</strong></div>
+        <div><span>數量</span><strong class="mono">${item.count || 1} 入</strong></div>
+        <div><span>單罐價</span><strong class="mono">$${formatNum(item.unitPrice)}</strong></div>
+        <div><span>購買日期</span><strong>${item.date ? escapeHtml(formatDateOnly(item.date)) : "—"}</strong></div>
+        <div><span>購買地點</span><strong>${item.location ? escapeHtml(item.location) : "—"}</strong></div>
+      </div>
+      ${variantsHtml}
+      <div class="detail-actions">
+        <button type="button" class="primary" id="detailCompareBtn">🔍 比價</button>
+        <button type="button" id="detailEditBtn">✎ 編輯</button>
+        <button type="button" class="danger" id="detailDeleteBtn">✕ 刪除</button>
+      </div>`;
+
+    body.querySelectorAll(".variant-row").forEach(btn => {
+      btn.addEventListener("click", () => {
+        detailRow = btn.dataset.row;
+        renderDetail();
       });
-    }
+    });
+    const compareBtn = $("detailCompareBtn");
+    const editBtn = $("detailEditBtn");
+    const delBtn = $("detailDeleteBtn");
+    if(compareBtn) compareBtn.addEventListener("click", () => {
+      closeAppModal("detailModal");
+      openCompareModal(item);
+    });
+    if(editBtn) editBtn.addEventListener("click", () => {
+      closeAppModal("detailModal");
+      startEdit(item);
+    });
+    if(delBtn) delBtn.addEventListener("click", () => {
+      closeAppModal("detailModal");
+      deleteItem(item.row);
+    });
+    return true;
   }
 
   // 只取「日期」欄位的日期部分，不顯示時間：
