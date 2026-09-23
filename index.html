@@ -3587,7 +3587,16 @@
     const logs = comparisonLog
       .filter(l => l["品項名稱"] === name)
       .slice()
-      .sort((a, b) => String(b["時間"] || "").localeCompare(String(a["時間"] || "")))
+      .sort((a, b) => {
+        // 依換算後的 CP 值由小到大排（CP 值愈小愈划算），沒有 CP 值的排最後面
+        const cpA = parseFloat(a["換算CP值"]);
+        const cpB = parseFloat(b["換算CP值"]);
+        const validA = !isNaN(cpA), validB = !isNaN(cpB);
+        if(validA && validB) return cpA - cpB;
+        if(validA) return -1;
+        if(validB) return 1;
+        return 0;
+      })
       .slice(0, 8);
 
     if(logs.length === 0){
@@ -3599,19 +3608,20 @@
     modalHistorySection.style.display = "block";
     modalCompareHistory.innerHTML = "";
     logs.forEach(l => {
-      const dateStr = String(l["時間"] || "").slice(0, 10);
       const location = l["地點"] || "（未填地點）";
       const grams = l["容量"] || "?";
       const count = l["數量"] || 1;
       const price = l["售價"] || "?";
+      const cpRaw = parseFloat(l["換算CP值"]);
+      const cpStr = isNaN(cpRaw) ? "?" : cpRaw.toFixed(3);
       const verdict = String(l["結果"] || "");
       const badge = VERDICT_BADGE[verdict] || { icon: "🔎", color: "var(--ink-soft)" };
       const row = document.createElement("div");
       row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; padding:6px 8px; background:var(--paper); border-radius:8px; border:1px solid var(--line);";
       row.innerHTML =
-        "<span style='color:var(--ink-soft);'>" + dateStr + " · " + location + "</span>" +
+        "<span style='color:var(--ink-soft);'>" + location + " · $" + price + "（" + grams + "×" + count + "）" + "</span>" +
         "<span class='mono' style='color:" + badge.color + "; font-weight:700; white-space:nowrap;'>" +
-        badge.icon + " $" + price + "（" + grams + "×" + count + "）" + "</span>";
+        badge.icon + " " + cpStr + " $/g" + "</span>";
       const delBtn = document.createElement("button");
       delBtn.type = "button";
       delBtn.textContent = "✕";
