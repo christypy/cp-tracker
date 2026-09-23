@@ -233,7 +233,7 @@
   }
 
   /* ---------- 回到最上面（列表展開很多筆之後，不用無限往上滑） ---------- */
-  #backToTopBtn{
+  #backToTopBtn, #scrollToBottomBtn{
     display:none;
     position:fixed;
     right:16px;
@@ -249,9 +249,12 @@
     cursor:pointer;
     box-shadow:0 6px 18px -6px rgba(43,40,32,.5);
     z-index:480;
+    touch-action:manipulation;
   }
-  #backToTopBtn.show{display:block;}
-  #backToTopBtn:hover{opacity:.9;}
+  #backToTopBtn.show, #scrollToBottomBtn.show{display:block;}
+  #backToTopBtn:hover, #scrollToBottomBtn:hover{opacity:.9;}
+  /* 兩顆懸浮按鈕上下堆疊：回到最下面在上、回到最上面在下 */
+  #scrollToBottomBtn{bottom:68px;}
 
   /* ---------- fixed editing panel (編輯時固定在畫面下方，不用往上滑) ---------- */
   #editBackdrop{
@@ -1715,6 +1718,7 @@
   /* ---- 底部安全區：避免 iOS 瀏覽器底部手勢列擋住固定按鈕 ---- */
   @media (max-width:640px){
     #backToTopBtn{bottom:calc(18px + env(safe-area-inset-bottom, 0px));}
+    #scrollToBottomBtn{bottom:calc(68px + env(safe-area-inset-bottom, 0px));}
     #addFormCard.editing-mode{bottom:calc(14px + env(safe-area-inset-bottom, 0px));}
     body{padding-bottom:calc(40px + env(safe-area-inset-bottom, 0px));}
   }
@@ -1726,6 +1730,7 @@
 <div id="editBackdrop"></div>
 
 <button type="button" id="backToTopBtn" title="回到最上面">▲</button>
+<button type="button" id="scrollToBottomBtn" title="快速到列表最下面">▼</button>
 
 <header>
   <div class="eyebrow">$ / g Ledger</div>
@@ -4564,14 +4569,33 @@
     }[c]));
   }
 
-  // ---------- 回到最上面按鈕（列表展開很多筆之後，不用一路往上滑） ----------
+  // ---------- 回到最上面／快速到最下面按鈕（列表展開很多筆之後，不用一路滑） ----------
   const backToTopBtn = $("backToTopBtn");
+  const scrollToBottomBtn = $("scrollToBottomBtn");
+  function updateScrollJumpBtns(){
+    const scrollY = window.scrollY;
+    const distanceFromBottom = document.documentElement.scrollHeight - (scrollY + window.innerHeight);
+    if(backToTopBtn) backToTopBtn.classList.toggle("show", scrollY > 500);
+    if(scrollToBottomBtn) scrollToBottomBtn.classList.toggle("show", distanceFromBottom > 400);
+  }
+  if(backToTopBtn || scrollToBottomBtn){
+    window.addEventListener("scroll", updateScrollJumpBtns, { passive: true });
+    window.addEventListener("resize", updateScrollJumpBtns, { passive: true });
+    // 列表內容變動（篩選、展開/收合類別區塊）時，頁面高度會跟著變，也要重新判斷懸浮按鈕要不要顯示
+    if(tableBody && window.MutationObserver){
+      const scrollBtnObserver = new MutationObserver(() => updateScrollJumpBtns());
+      scrollBtnObserver.observe(tableBody, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    }
+    updateScrollJumpBtns();
+  }
   if(backToTopBtn){
-    window.addEventListener("scroll", () => {
-      backToTopBtn.classList.toggle("show", window.scrollY > 500);
-    }, { passive: true });
     backToTopBtn.addEventListener("click", () => {
       window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+  if(scrollToBottomBtn){
+    scrollToBottomBtn.addEventListener("click", () => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
     });
   }
 
