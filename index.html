@@ -21,8 +21,9 @@
     --white:#FFFCF7;
     --radius:14px;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
+  button, .chip, .leaderboard-chip, .p-card, .cat-section-head{touch-action:manipulation;}
   body{
     background:var(--paper);
     background-image:
@@ -733,7 +734,8 @@
     font-family:'Space Mono', monospace;
     font-size:12px;
     white-space:nowrap;
-    padding:0 12px;
+    padding:9px 12px;
+    min-height:38px;
     border:1px solid var(--line);
     border-radius:8px;
     background:var(--white);
@@ -758,7 +760,8 @@
   .cat-manual-row button{
     font-family:'Space Mono', monospace;
     font-size:12px;
-    padding:0 14px;
+    padding:9px 14px;
+    min-height:38px;
     border:1px solid var(--ink);
     background:var(--ink);
     color:var(--paper);
@@ -885,13 +888,15 @@
   .app-modal-close{
     font-family:'Space Mono', monospace;
     font-size:13px;
-    padding:6px 12px;
+    padding:9px 14px;
+    min-height:40px;
     border:1px solid var(--line);
     border-radius:8px;
     background:var(--paper);
     color:var(--ink-soft);
     cursor:pointer;
     flex:none;
+    touch-action:manipulation;
   }
   .app-modal-close:hover{color:var(--ink); border-color:var(--ink);}
   @media (max-width:560px){
@@ -979,12 +984,14 @@
   .location-manager-row .loc-actions button{
     font-family:'Space Mono', monospace;
     font-size:11px;
-    padding:5px 10px;
+    padding:8px 10px;
+    min-height:34px;
     border-radius:6px;
     border:1px solid var(--line);
     background:var(--white);
     color:var(--ink-soft);
     cursor:pointer;
+    touch-action:manipulation;
   }
   .location-manager-row .loc-actions button:hover{color:var(--ink); border-color:var(--ink);}
   .location-manager-row .loc-actions button.danger:hover{color:var(--red); border-color:var(--red);}
@@ -1072,33 +1079,35 @@
   .location-manager-row.sub .loc-name{font-size:12px; color:var(--ink-soft);}
   /* 圖示按鈕（編輯／搬移／刪除）取代文字按鈕，讓每一列更窄、視覺更輕 */
   .loc-actions button.icon-btn{
-    padding:5px 9px;
-    font-size:13px;
+    padding:8px 10px;
+    font-size:14px;
     line-height:1;
-    min-width:28px;
+    min-width:36px;
+    min-height:34px;
     text-align:center;
   }
   /* 排序用的上／下移按鈕：直向堆疊、放在每一列最前面，像一般管理介面常見的排序把手 */
   .order-controls{
     display:flex;
     flex-direction:column;
-    gap:2px;
+    gap:3px;
     flex:none;
   }
   .order-controls button{
-    width:20px;
-    height:15px;
+    width:28px;
+    height:24px;
     padding:0;
     line-height:1;
-    font-size:9px;
+    font-size:11px;
     border:1px solid var(--line);
-    border-radius:4px;
+    border-radius:5px;
     background:var(--white);
     color:var(--ink-soft);
     cursor:pointer;
     display:flex;
     align-items:center;
     justify-content:center;
+    touch-action:manipulation;
   }
   .order-controls button:hover:not(:disabled){color:var(--ink); border-color:var(--ink);}
   .order-controls button:disabled{opacity:.3; cursor:default;}
@@ -1587,6 +1596,127 @@
   }
   @media (max-width:360px){
     .band-grid{grid-template-columns:1fr;}
+  }
+
+  /* ============================================================
+     手機操作優化（Mobile usability pass）
+     整理：字太小、間距太擠、按鈕點不準、清單看不清楚、彈出視窗卡卡的
+     ============================================================ */
+
+  /* ---- 手機鍵盤：所有輸入框字體至少 16px，避免 iOS Safari 自動放大整頁 ---- */
+  @media (max-width:640px){
+    input, select, textarea{
+      font-size:16px;
+    }
+    .field input, .field select{font-size:16px;}
+    .stamp{font-size:20px;}
+  }
+
+  /* ---- 商品小卡清單：手機上大部分機型改成單欄，資訊才不會擠成一團 ---- */
+  @media (max-width:480px){
+    .band-grid{grid-template-columns:1fr; gap:8px;}
+    .p-card{padding:13px 14px;}
+    .p-name{font-size:15px;}
+    .p-cp{font-size:18px;}
+  }
+
+  /* ---- 全域可點擊元件：手機上加大點擊區域、拿掉 300ms 觸控延遲 ---- */
+  @media (max-width:640px){
+    .chip{
+      padding:9px 14px;
+      min-height:40px;
+      display:inline-flex;
+      align-items:center;
+      font-size:13px;
+    }
+    .chip.sub{min-height:36px; padding:7px 12px;}
+    .leaderboard-chip{
+      padding:8px 14px;
+      min-height:40px;
+      touch-action:manipulation;
+    }
+    .lb-name{font-size:14px;}
+    #categoryChildCheckboxes .leaderboard-chip{padding:8px 12px; min-height:38px;}
+    #quickManageLinks button{
+      padding:9px 14px;
+      min-height:40px;
+      font-size:12px;
+    }
+    .pager-btn{min-height:40px; padding:9px 14px;}
+    #refreshBtn{min-width:40px; min-height:40px; padding:8px;}
+    .cat-section-head{padding:14px;}
+    .cat-row-toggle{padding:2px 0; min-height:32px;}
+    .detail-actions button{padding:12px 8px; font-size:13.5px;}
+    #sortToggleBtn{min-height:38px; padding:8px 12px;}
+  }
+
+  /* ---- 表單：主／子類別挑選區塊行距加大，避免手指誤點到隔壁選項 ---- */
+  @media (max-width:640px){
+    #formCategoryLeaderboard .leaderboard-strip,
+    #categoryChildCheckboxes .leaderboard-strip{
+      gap:10px;
+    }
+    form#addForm{gap:16px;}
+    .field{gap:7px;}
+    #addBtn{
+      padding:14px;
+      font-size:16px;
+      min-height:50px;
+    }
+  }
+
+  /* ---- 管理清單（購買地點／主子類別）：手機上允許換行，按鈕才不會被擠壓變形 ---- */
+  @media (max-width:480px){
+    .location-manager-row{
+      flex-wrap:wrap;
+      row-gap:8px;
+      padding:10px;
+    }
+    .location-manager-row .loc-name{
+      flex:1 1 60%;
+      white-space:normal;
+      word-break:break-word;
+    }
+    .location-manager-row .loc-actions{
+      margin-left:auto;
+    }
+    .cat-toolbar{gap:10px;}
+    .cat-toolbar .cat-manual-row,
+    .cat-toolbar > input{flex:1 1 100%;}
+  }
+
+  /* ---- 彈出視窗：手機上關閉按鈕更好點、標題列固定在頂端 ---- */
+  @media (max-width:640px){
+    .app-modal-box{padding:14px 14px 24px;}
+    .app-modal-header{
+      position:sticky;
+      top:0;
+      background:var(--white);
+      padding-top:2px;
+      margin-bottom:12px;
+      z-index:2;
+    }
+    .app-modal-close{
+      width:40px;
+      height:40px;
+      padding:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:50%;
+      font-size:0;
+    }
+    .app-modal-close::before{
+      content:"✕";
+      font-size:16px;
+    }
+  }
+
+  /* ---- 底部安全區：避免 iOS 瀏覽器底部手勢列擋住固定按鈕 ---- */
+  @media (max-width:640px){
+    #backToTopBtn{bottom:calc(18px + env(safe-area-inset-bottom, 0px));}
+    #addFormCard.editing-mode{bottom:calc(14px + env(safe-area-inset-bottom, 0px));}
+    body{padding-bottom:calc(40px + env(safe-area-inset-bottom, 0px));}
   }
 
 </style>
