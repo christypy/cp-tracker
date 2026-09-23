@@ -2068,8 +2068,10 @@
   const CATEGORY_SEP = "/";
 
   // 手動建立、獨立存放的類別清單：{ 主類別: [子類別, ...] }
-  // 跟地點清單一樣持久化在 localStorage，這樣「還沒有任何紀錄的空類別」也能先建立、先管理，
-  // 之後新增品項時可以直接點選，不用重打一次名稱。buildCategoryTree() 會把這份清單跟既有紀錄反推出來的類別合併。
+  // 這樣「還沒有任何紀錄的空類別」也能先建立、先管理，之後新增品項時可以直接點選，不用重打一次名稱。
+  // buildCategoryTree() 會把這份清單跟既有紀錄反推出來的類別合併。
+  // 這份清單會同步存回試算表的「手動類別」分頁（跟「類別排序」同樣做法），這樣不同裝置、
+  // 清掉瀏覽器資料後都不會跑掉；localStorage 只當作離線時的暫存快取用。
   const LS_CATEGORIES_KEY = "cp_tracker_categories_full";
   let manageableCategories = {};
   try{
@@ -2077,8 +2079,32 @@
   }catch(e){
     manageableCategories = {};
   }
-  function persistCategories(){
+  // 只更新本機快取，不觸發同步到試算表（用於剛從伺服器讀回資料時，避免讀完馬上又寫回去）
+  function persistCategoriesLocalOnly(){
     localStorage.setItem(LS_CATEGORIES_KEY, JSON.stringify(manageableCategories));
+  }
+  // 把目前的手動類別清單整包送回 Google Apps Script，寫進試算表的「手動類別」分頁
+  function saveManualCategoriesToServer(){
+    persistCategoriesLocalOnly();
+    if(!scriptUrl) return;
+    setSyncState("syncing", "同步類別中…");
+    fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ action: "saveManualCategories", categories: manageableCategories })
+    }).then(res => res.text()).then(text => {
+      let data;
+      try{ data = JSON.parse(text); }catch(parseErr){ throw new Error("回傳格式錯誤"); }
+      if(data.status !== "ok") throw new Error(data.message || "類別同步失敗");
+      setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+    }).catch(err => {
+      setSyncState("error", "類別同步失敗：" + err.message);
+      if(categoryManagerMsg) categoryManagerMsg.textContent = "類別已在本機更新，但同步到試算表失敗：" + err.message;
+    });
+  }
+  function persistCategories(){
+    persistCategoriesLocalOnly();
+    saveManualCategoriesToServer();
   }
 
   // 主類別／子類別的「自訂排序」：使用者在管理畫面按上移／下移調整，會同步存回試算表的
@@ -3963,6 +3989,14 @@
       }
       comparisonLog = Array.isArray(data.comparisonLog) ? data.comparisonLog : [];
       localStorage.setItem(LS_COMPLOG_CACHE_KEY, JSON.stringify(comparisonLog));
+      if(data.manualCategories && typeof data.manualCategories === "object"){
+        const normalizedManual = {};
+        Object.keys(data.manualCategories).forEach(k => {
+          normalizedManual[k] = Array.isArray(data.manualCategories[k]) ? data.manualCategories[k] : [];
+        });
+        manageableCategories = normalizedManual;
+        persistCategoriesLocalOnly();
+      }
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
