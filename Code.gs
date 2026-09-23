@@ -26,12 +26,22 @@
  *    請在試算表裡「類別」欄位右邊手動插入一個新欄，標題列填「子類別」，
  *    這樣舊資料的「地點」「新增時間」等欄位才不會被錯位覆蓋。
  *    舊資料本來就沒有子類別，留空即可，之後編輯該筆紀錄時再補上就會存進新欄位。
+ *
+ * ℹ 這個版本加了「比價紀錄」功能：在比價彈窗按「記錄這次比價」，不管划不划算都會存一筆進
+ *    一個叫「比價紀錄」的新分頁（跟「類別排序」一樣，第一次用到時會自動建立，不用手動新增），
+ *    下次打開同一個品項的比價視窗就能看到之前查過哪些地點／價格，不用重複比價。
  */
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
 
 // 存放「主類別／子類別排序」的分頁，會在第一次用到時自動建立，不需要手動新增
 const CATEGORY_ORDER_SHEET_NAME = '類別排序';
+
+// 存放「比價紀錄」的分頁，同樣會在第一次用到時自動建立。
+// 不管這次查價划不划算都可以存一筆進來，用來記住「這個品項在哪個地點查過多少錢、結果如何」，
+// 避免下次逛街又重新比一次同一間店。跟品項本身的正式紀錄是分開的兩張表。
+const COMPARISON_LOG_SHEET_NAME = '比價紀錄';
+const COMPARISON_LOG_FIELDS = ['時間', '品項名稱', '對應列號', '容量', '數量', '售價', '換算CP值', '基準CP值', '結果', '地點'];
 
 // 欄位固定順序（對應試算表由左到右的欄）
 const FIELD_ORDER = ['品項名稱', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
@@ -115,6 +125,63 @@ function writeCategoryOrder_(order) {
   }
 }
 
+// 取得（或自動建立）存放比價紀錄的分頁
+function getComparisonLogSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(COMPARISON_LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(COMPARISON_LOG_SHEET_NAME);
+    sheet.appendRow(COMPARISON_LOG_FIELDS);
+  }
+  return sheet;
+}
+
+// 讀出所有比價紀錄，給前端在比價視窗顯示「之前查過哪些地點／價格」
+function readComparisonLog_() {
+  const sheet = getComparisonLogSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values.shift();
+  const logs = [];
+  values.forEach((row, i) => {
+    if (!row[1]) return; // 沒有品項名稱的空白列跳過
+    const obj = {};
+    headers.forEach((h, idx) => {
+      let val = row[idx];
+      if (h === '時間' && val instanceof Date) {
+        val = Utilities.formatDate(val, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+      }
+      obj[h] = val;
+    });
+    obj._row = i + 2; // 對應到試算表的實際列號（用於刪除）
+    logs.push(obj);
+  });
+  return logs;
+}
+
+// 新增一筆比價紀錄。不管這次划不划算都可以呼叫，單純記錄「查過」這件事。
+function appendComparisonLog_(body) {
+  const name = String(body.name || '').trim();
+  if (!name) throw new Error('缺少品項名稱，無法記錄比價');
+
+  const sheet = getComparisonLogSheet_();
+  const rowValues = [
+    new Date(),
+    name,
+    (body.row !== undefined && body.row !== null && body.row !== '' && !isNaN(Number(body.row))) ? Number(body.row) : '',
+    Number(body.grams) || '',
+    Number(body.count) || 1,
+    Number(body.price) || '',
+    Number(body.cp) || '',
+    Number(body.baseCp) || '',
+    String(body.verdict || '').trim(),
+    String(body.location || '').trim()
+  ];
+  sheet.appendRow(rowValues);
+  return sheet.getLastRow();
+}
+
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -147,7 +214,8 @@ function doGet(e) {
       items.push(obj);
     });
     const categoryOrder = readCategoryOrder_();
-    return jsonOut_({ status: 'ok', items, categoryOrder });
+    const comparisonLog = readComparisonLog_();
+    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
@@ -185,6 +253,20 @@ function doPost(e) {
     // 儲存主／子類別的自訂排序（跟品項資料是不同分頁，這裡直接處理、不用碰到品項工作表）
     if (body.action === 'saveCategoryOrder') {
       writeCategoryOrder_(body.order || {});
+      return jsonOut_({ status: 'ok' });
+    }
+
+    // 記錄一筆比價結果（跟品項資料是不同分頁，不管這次划不划算都可以記錄，方便下次不用重比）
+    if (body.action === 'logComparison') {
+      const row = appendComparisonLog_(body);
+      return jsonOut_({ status: 'ok', row });
+    }
+
+    // 刪除一筆比價紀錄（例如記錯了，或想清掉太舊的查價紀錄）
+    if (body.action === 'deleteComparisonLog') {
+      const row = Number(body.row);
+      if (row < 2) throw new Error('無效的列號');
+      getComparisonLogSheet_().deleteRow(row);
       return jsonOut_({ status: 'ok' });
     }
 

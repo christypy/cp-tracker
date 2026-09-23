@@ -1942,6 +1942,9 @@
         <input type="number" id="modalCount" inputmode="numeric" min="1" value="1" placeholder="例如 2">
       </div>
       <div class="field" style="grid-column:1/-1;">
+        <div id="modalCountShortcuts" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
         <label for="modalPrice">現場售價 ($，全部數量的總價)</label>
         <input type="number" id="modalPrice" inputmode="decimal" placeholder="例如 150">
       </div>
@@ -1958,6 +1961,11 @@
       <div id="modalVerdict" class="stamp mono" style="font-size:15px; padding:6px 12px; transform:none; display:none; margin-top:4px;">--</div>
     </div>
 
+    <div id="modalHistorySection" style="display:none; margin-top:14px; padding-top:14px; border-top:1px dashed var(--line);">
+      <div style="font-size:11px; letter-spacing:.08em; color:var(--ink-soft); text-transform:uppercase; margin-bottom:8px;">🕐 之前比過的價格</div>
+      <div id="modalCompareHistory" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+
     <div id="modalSaveSection" style="display:none; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line);">
       <div class="field" style="margin-bottom:10px;">
         <label id="modalSaveLabel">🎉 更划算！在哪裡找到這個價格？</label>
@@ -1965,6 +1973,7 @@
         <input type="text" id="modalLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
       </div>
       <button type="button" id="modalSaveBtn" style="width:100%; padding:10px; border:none; border-radius:8px; background:var(--green); color:var(--white); cursor:pointer; font-family:'Space Mono', monospace; font-size:13px; font-weight:700;">💾 儲存這筆更划算的紀錄</button>
+      <button type="button" id="modalLogBtn" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--white); color:var(--ink); cursor:pointer; font-family:'Space Mono', monospace; font-size:12px; font-weight:700; margin-top:8px;">📝 只記錄這次比價（不建立正式紀錄）</button>
       <div id="modalSaveMsg" style="font-size:12px; text-align:center; margin-top:8px; color:var(--ink-soft);"></div>
     </div>
 
@@ -2016,6 +2025,9 @@
   persistLocations();
 
   let items = [];
+  // 比價紀錄：不管划不划算，只要按過「記錄這次比價」都會存在這裡（同步在 Google 試算表的「比價紀錄」分頁）
+  let comparisonLog = [];
+  const LS_COMPLOG_CACHE_KEY = "cpValueComparisonLogCache_v1";
   let activeCategory = "__all__";
   let searchTerm = "";
   let sortAsc = true;
@@ -3531,7 +3543,98 @@
 
   let activeCompareCp = 0;
   let activeCompareItem = null;
+  let currentVerdictText = "";
+  let currentCompareVals = null; // { grams, count, price, cp } － 給「只記錄這次比價」按鈕用
   const EPSILON = 0.05; // 價格容許誤差（四捨五入/浮點數用），在此範圍內視為「一樣划算」
+
+  const modalCountShortcuts = $("modalCountShortcuts");
+  const modalHistorySection = $("modalHistorySection");
+  const modalCompareHistory = $("modalCompareHistory");
+  const modalLogBtn = $("modalLogBtn");
+
+  // 快速數量按鈕：常見情境是「基準是一大包(N入)，但架上看到的是拆賣的 1 入」，
+  // 這樣點一下就切換數量，容量欄位完全不用動，只要再填現場售價即可比較。
+  function renderCountShortcuts(item){
+    const baseCount = item.count || 1;
+    const options = Array.from(new Set([1, baseCount].filter(n => n > 0)));
+    modalCountShortcuts.innerHTML = "";
+    if(options.length < 2) return; // 基準本來就是 1 入，不需要額外顯示快捷按鈕
+    options.forEach(n => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.textContent = n === baseCount ? ("↺ 回到基準 " + n + " 入") : ("⚡ 只比 " + n + " 入");
+      btn.addEventListener("click", () => {
+        modalCount.value = n;
+        calcComparison();
+        modalPrice.focus();
+        modalPrice.select();
+      });
+      modalCountShortcuts.appendChild(btn);
+    });
+  }
+
+  const VERDICT_BADGE = {
+    "更划算": { icon: "🎉", color: "var(--green)" },
+    "買貴了": { icon: "❌", color: "var(--red)" },
+    "差不多": { icon: "⚖", color: "var(--ink-soft)" },
+    "已建立紀錄": { icon: "✅", color: "var(--green)" }
+  };
+
+  // 顯示這個品項之前比過的價格（同名品項共用同一份紀錄），最新的排最前面，
+  // 一眼就能看出「這間店查過了、不划算」，不用重新比一次。
+  function renderCompareHistory(name){
+    const logs = comparisonLog
+      .filter(l => l["品項名稱"] === name)
+      .slice()
+      .sort((a, b) => String(b["時間"] || "").localeCompare(String(a["時間"] || "")))
+      .slice(0, 8);
+
+    if(logs.length === 0){
+      modalHistorySection.style.display = "none";
+      modalCompareHistory.innerHTML = "";
+      return;
+    }
+
+    modalHistorySection.style.display = "block";
+    modalCompareHistory.innerHTML = "";
+    logs.forEach(l => {
+      const dateStr = String(l["時間"] || "").slice(0, 10);
+      const location = l["地點"] || "（未填地點）";
+      const grams = l["容量"] || "?";
+      const count = l["數量"] || 1;
+      const price = l["售價"] || "?";
+      const verdict = String(l["結果"] || "");
+      const badge = VERDICT_BADGE[verdict] || { icon: "🔎", color: "var(--ink-soft)" };
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; padding:6px 8px; background:var(--paper); border-radius:8px; border:1px solid var(--line);";
+      row.innerHTML =
+        "<span style='color:var(--ink-soft);'>" + dateStr + " · " + location + "</span>" +
+        "<span class='mono' style='color:" + badge.color + "; font-weight:700; white-space:nowrap;'>" +
+        badge.icon + " $" + price + "（" + grams + "×" + count + "）" + "</span>";
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.textContent = "✕";
+      delBtn.title = "刪除這筆比價紀錄";
+      delBtn.style.cssText = "border:none; background:transparent; color:var(--ink-soft); cursor:pointer; font-size:12px; padding:0 2px;";
+      delBtn.addEventListener("click", () => deleteComparisonLogEntry(l));
+      row.appendChild(delBtn);
+      modalCompareHistory.appendChild(row);
+    });
+  }
+
+  async function deleteComparisonLogEntry(logEntry){
+    comparisonLog = comparisonLog.filter(l => l !== logEntry);
+    renderCompareHistory(activeCompareItem ? activeCompareItem.name : "");
+    if(!scriptUrl || logEntry._row === undefined) return;
+    try{
+      await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({ action: "deleteComparisonLog", row: logEntry._row })
+      });
+    }catch(err){ /* 本地已經移除了，同步失敗下次重新整理會再抓回來，先不特別提示 */ }
+  }
 
   function openCompareModal(item){
     activeCompareCp = item.cp;
@@ -3545,6 +3648,8 @@
     setLocationValue(modalLocationSelect, modalLocationCustom, "");
     modalSaveSection.style.display = "none";
     modalSaveMsg.textContent = "";
+    renderCountShortcuts(item);
+    renderCompareHistory(item.name);
     compareModal.style.display = "flex";
     calcComparison();
     modalGrams.focus();
@@ -3558,6 +3663,9 @@
     modalUnitCp.style.display = "none";
     modalVerdict.style.display = "none";
     modalSaveSection.style.display = "none";
+    modalSaveBtn.style.display = "block";
+    currentVerdictText = "";
+    currentCompareVals = null;
   }
 
   function calcComparison(){
@@ -3590,28 +3698,36 @@
       if(hasPrice){
         // 兩邊都填了，直接算出這次交易實際的 CP 值，並跟基準比較
         const newCp = newPrice / (newGrams * newCount);
+        currentCompareVals = { grams: newGrams, count: newCount, price: newPrice, cp: newCp };
         modalUnitCp.style.display = "block";
         modalUnitCpVal.textContent = newCp.toFixed(3);
 
         modalVerdict.style.display = "block";
         const diff = newPrice - targetPrice;
+        // 不管划不划算，都讓「只記錄這次比價」可以用，避免下次逛到同一間店又重新比一次。
+        modalSaveSection.style.display = "block";
         if(diff < -EPSILON){
+          currentVerdictText = "更划算";
           modalVerdict.textContent = "🎉 更划算！(省 $" + Math.abs(diff).toFixed(1) + ")";
           modalVerdict.style.color = "var(--green)";
           modalVerdict.style.borderColor = "var(--green)";
           modalSaveLabel.textContent = "🎉 更划算！在哪裡找到這個價格？";
-          modalSaveSection.style.display = "block";
+          modalSaveBtn.style.display = "block";
         } else if(diff > EPSILON){
+          currentVerdictText = "買貴了";
           modalVerdict.textContent = "❌ 買貴了！(貴 $" + diff.toFixed(1) + ")";
           modalVerdict.style.color = "var(--red)";
           modalVerdict.style.borderColor = "var(--red)";
+          modalSaveLabel.textContent = "❌ 這個價格比較貴，還是想先記錄起來？";
+          modalSaveBtn.style.display = "none";
         } else {
+          currentVerdictText = "差不多";
           modalVerdict.textContent = "⚖ 劃算度相同";
           modalVerdict.style.color = "var(--ink-soft)";
           modalVerdict.style.borderColor = "var(--ink-soft)";
           // 划算度相同，也是多一個可以比價的通路／容量選擇，一樣可以存成新的一筆紀錄
           modalSaveLabel.textContent = "⚖ 划算度相同，也想記錄這個通路／容量嗎？";
-          modalSaveSection.style.display = "block";
+          modalSaveBtn.style.display = "block";
         }
       } else {
         modalTargetHint.style.display = "block";
@@ -3695,12 +3811,76 @@
     uploadQueue.push({ tempId, name, category, subCategory, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
     processQueue();
 
+    // 已經存成正式紀錄了，一併記一筆比價紀錄，歷史清單看起來才會連貫（標示為「已建立紀錄」）
+    logComparisonEntry(currentVerdictText === "買貴了" ? currentVerdictText : "已建立紀錄", location);
+
     modalSaveMsg.textContent = "✓ 已加入紀錄，背景同步中…";
     modalSaveMsg.style.color = "var(--green)";
     setTimeout(() => {
       compareModal.style.display = "none";
     }, 900);
   }
+
+  // 把「這次比價」存進比價紀錄分頁（不建立正式的品項紀錄）。地點可留空，但建議填，
+  // 之後才看得出「這間店查過了」。本地先樂觀更新，背景再送出同步。
+  async function logComparisonEntry(verdictOverride, locationOverride){
+    if(!activeCompareItem || !currentCompareVals){
+      modalSaveMsg.textContent = "請先把容量與售價都填好";
+      modalSaveMsg.style.color = "var(--red)";
+      return;
+    }
+    const verdict = verdictOverride || currentVerdictText || "";
+    const location = locationOverride !== undefined
+      ? locationOverride
+      : getLocationValue(modalLocationSelect, modalLocationCustom);
+
+    const entry = {
+      "時間": new Date().toISOString(),
+      "品項名稱": activeCompareItem.name,
+      "對應列號": activeCompareItem.row,
+      "容量": currentCompareVals.grams,
+      "數量": currentCompareVals.count,
+      "售價": currentCompareVals.price,
+      "換算CP值": currentCompareVals.cp,
+      "基準CP值": activeCompareCp,
+      "結果": verdict,
+      "地點": location || ""
+    };
+    comparisonLog.unshift(entry);
+    renderCompareHistory(activeCompareItem.name);
+    localStorage.setItem(LS_COMPLOG_CACHE_KEY, JSON.stringify(comparisonLog));
+
+    if(location) saveCustomLocation(location);
+
+    modalSaveMsg.textContent = "📝 已記錄這次比價";
+    modalSaveMsg.style.color = "var(--green)";
+
+    if(!scriptUrl) return;
+    try{
+      const res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({
+          action: "logComparison",
+          name: entry["品項名稱"],
+          row: typeof entry["對應列號"] === "number" ? entry["對應列號"] : "",
+          grams: entry["容量"],
+          count: entry["數量"],
+          price: entry["售價"],
+          cp: entry["換算CP值"],
+          baseCp: entry["基準CP值"],
+          verdict: entry["結果"],
+          location: entry["地點"]
+        })
+      });
+      const data = JSON.parse(await res.text());
+      if(data.status === "ok" && typeof data.row === "number"){
+        entry._row = data.row;
+      }
+    }catch(err){ /* 同步失敗也沒關係，本地已經看得到這筆紀錄了 */ }
+  }
+
+  modalLogBtn.addEventListener("click", () => logComparisonEntry());
 
   modalSaveBtn.addEventListener("click", saveCompareAsNewRecord);
 
@@ -3771,6 +3951,8 @@
         };
         persistCategoryOrderLocal();
       }
+      comparisonLog = Array.isArray(data.comparisonLog) ? data.comparisonLog : [];
+      localStorage.setItem(LS_COMPLOG_CACHE_KEY, JSON.stringify(comparisonLog));
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
@@ -3782,6 +3964,10 @@
         renderLocationOptions();
         renderCategoryChips();
         renderTable();
+      }
+      const cachedLog = localStorage.getItem(LS_COMPLOG_CACHE_KEY);
+      if(cachedLog){
+        try{ comparisonLog = JSON.parse(cachedLog); }catch(e){ /* 忽略壞掉的快取 */ }
       }
       setSyncState("error", "同步失敗，顯示上次快取（" + err.message + "）");
     }
