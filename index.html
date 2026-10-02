@@ -1793,6 +1793,18 @@
   @media (max-width:380px){
     form#addForm, .calc-grid{ grid-template-columns:1fr; }
   }
+  /* 數字輸入：移除上下增減按鈕，純輸入 */
+  input[type=number]{
+    -moz-appearance:textfield;
+    appearance:textfield;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{
+    -webkit-appearance:none;
+    margin:0;
+  }
+  #brandChips{ margin-top:2px; }
+  #brandChips:empty{ display:none; }
   /* 防止寬內容把整個頁面撐出橫向捲軸 */
   html, body{ overflow-x:hidden; max-width:100%; }
   .field, .field > *{ min-width:0; }
@@ -1856,8 +1868,14 @@
       </div>
 
       <div class="field full">
+        <label for="itemBrand">品牌 <span style="color:var(--ink-soft);font-weight:400;">（可選，點選或直接輸入）</span></label>
+        <input type="text" id="itemBrand" list="brandList" placeholder="例如 DHC" autocomplete="off" autocapitalize="off">
+        <datalist id="brandList"></datalist>
+        <div class="chips" id="brandChips"></div>
+      </div>
+      <div class="field full">
         <label for="itemName">品項名稱</label>
-        <input type="text" id="itemName" placeholder="例如 DHC 金靚白水亮防曬乳" required>
+        <input type="text" id="itemName" placeholder="例如 金靚白水亮防曬乳（不用再打品牌）" required>
       </div>
       <div class="field full">
         <label>主類別 <span style="color:var(--red);">*必填</span><span class="cat-field-hint">點擊下方 CP值排行榜的標籤即可選為主類別</span></label>
@@ -4230,7 +4248,8 @@
       formMsg.textContent = "請先設定同步網址";
       return;
     }
-    const name = $("itemName").value.trim();
+    const productName = $("itemName").value.trim();
+    const name = buildFullName($("itemBrand").value, productName);
     const category = selectedParentCategory.trim();
     const subCategory = selectedSubCategories.join(",");
     const grams = parseFloat($("itemGrams").value);
@@ -4238,7 +4257,7 @@
     const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
     const location = getLocationValue(itemLocationSelect, itemLocationCustom);
-    if(!name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
+    if(!productName || !name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
       formMsg.textContent = "請確認欄位都已正確填寫（主類別為必填，請在上方 CP值排行榜點選一個，子類別可留空）";
       return;
     }
@@ -4280,12 +4299,56 @@
     itemDateInput.value = date || new Date().toISOString().slice(0, 10);
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
     resetCategorySelection();
+    renderBrandOptions();
     formMsg.textContent = "";
     $("itemGrams").focus();
 
     uploadQueue.push({ tempId, name, category, subCategory, grams, price, count, unitPrice, date, location });
     processQueue();
   });
+
+  // ---------- 品牌（儲存格式仍是「品牌 品名」，所以試算表、舊資料都不用改） ----------
+  function splitBrandName(full){
+    const t = String(full || "").trim();
+    const m = t.match(/^(\S+)\s+([\s\S]+)$/);
+    return m ? { brand: m[1], product: m[2].trim() } : { brand: "", product: t };
+  }
+  function buildFullName(brand, product){
+    const b = String(brand || "").replace(/\s+/g, "");  // 品牌內的空格會干擾拆分，自動拿掉
+    const n = String(product || "").trim();
+    return b ? (b + " " + n) : n;
+  }
+  function renderBrandOptions(){
+    const dl = $("brandList");
+    const chipsEl = $("brandChips");
+    if(!dl || !chipsEl) return;
+    const count = {};
+    (items || []).forEach(it => {
+      const b = splitBrandName(it.name).brand;
+      if(b) count[b] = (count[b] || 0) + 1;
+    });
+    const brands = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b, "zh-Hant"));
+    dl.innerHTML = "";
+    brands.forEach(b => {
+      const o = document.createElement("option");
+      o.value = b;
+      dl.appendChild(o);
+    });
+    chipsEl.innerHTML = "";
+    brands.slice(0, 8).forEach(b => {
+      const c = document.createElement("button");
+      c.type = "button";
+      c.className = "chip sub" + ($("itemBrand").value.trim() === b ? " active" : "");
+      c.textContent = b;
+      c.addEventListener("click", () => {
+        const inp = $("itemBrand");
+        inp.value = (inp.value.trim() === b) ? "" : b;   // 再點一次取消
+        renderBrandOptions();
+      });
+      chipsEl.appendChild(c);
+    });
+  }
+  $("itemBrand").addEventListener("input", renderBrandOptions);
 
   // ---------- 編輯品項 ----------
   const formTitle = $("formTitle");
@@ -4300,7 +4363,11 @@
     $("itemGrams").value = item.grams;
     $("itemPrice").value = item.price;
     $("itemCount").value = item.count || 1;
-    $("itemName").value = item.name;
+    {
+      const parts = splitBrandName(item.name);
+      $("itemBrand").value = parts.brand;
+      $("itemName").value = parts.product;
+    }
     // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」「健康的」，
     // 這樣編輯時可以直接看到、也可以直接修改子類別，儲存時會一併更新回試算表
     selectedSubCategories = subCategoriesOf(item);
@@ -4332,6 +4399,7 @@
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
     resetCategorySelection();
     updateCalc();
+    renderBrandOptions();
     formTitle.textContent = "新增品項";
     addBtn.textContent = "加入紀錄";
     cancelEditBtn.style.display = "none";
@@ -4718,6 +4786,7 @@
   }
 
   function renderTable(){
+    renderBrandOptions();
     updateCategoryStatsBar();
     if(sortToggleBtn){
       sortToggleBtn.textContent = sortAsc ? "🔽 最划算優先" : "🔼 最貴優先";
@@ -4935,6 +5004,16 @@
     }catch(e){}
   }
   loadItems();
+
+  // ---------- 數字輸入：禁用滾輪與上下鍵增減，純輸入 ----------
+  document.addEventListener("wheel", (e) => {
+    const a = document.activeElement;
+    if(a && a.type === "number" && e.target === a) a.blur();   // 取消聚焦，頁面照常捲動
+  }, { passive:true });
+  document.addEventListener("keydown", (e) => {
+    const a = document.activeElement;
+    if(a && a.type === "number" && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.preventDefault();
+  });
 
   // ---------- 手機可見範圍追蹤（鍵盤彈出／網址列伸縮時，彈窗仍貼合畫面） ----------
   (function(){
