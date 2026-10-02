@@ -2870,7 +2870,8 @@
           body: JSON.stringify({
             action: "update",
             row: item.row,
-            name: item.name,
+            brand: item.brand || "",
+            name: item.product !== undefined ? item.product : item.name,
             category: item.category,
             subCategory: item.subCategory,
             grams: item.grams,
@@ -3353,7 +3354,8 @@
           body: JSON.stringify({
             action: "update",
             row: item.row,
-            name: item.name,
+            brand: item.brand || "",
+            name: item.product !== undefined ? item.product : item.name,
             category: item.category,
             subCategory: item.subCategory,
             grams: item.grams,
@@ -3922,6 +3924,8 @@
     const cp = newPrice / (newGrams * newCount);
     const date = new Date().toISOString().slice(0, 10);
     const name = activeCompareItem.name;
+    const brand = activeCompareItem.brand || "";
+    const product = activeCompareItem.product !== undefined ? activeCompareItem.product : activeCompareItem.name;
     const category = activeCompareItem.category;
     const subCategory = activeCompareItem.subCategory || "";
 
@@ -3931,7 +3935,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category, subCategory,
+      name, brand, product, category, subCategory,
       grams: newGrams,
       price: newPrice,
       count: newCount,
@@ -3946,7 +3950,7 @@
     renderCategoryChips();
     renderTable();
 
-    uploadQueue.push({ tempId, name, category, subCategory, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
+    uploadQueue.push({ tempId, name, brand, product, category, subCategory, grams: newGrams, price: newPrice, count: newCount, unitPrice, date, location });
     processQueue();
 
     // 已經存成正式紀錄了，一併記一筆比價紀錄，歷史清單看起來才會連貫（標示為「已建立紀錄」）
@@ -4133,6 +4137,9 @@
     }
     if(item.subCategory === undefined || item.subCategory === null) item.subCategory = "";
     delete item.categories;
+    // 舊版快取沒有品牌／品名拆分：品名＝原本整個名稱，品牌留空
+    if(typeof item.brand !== "string") item.brand = "";
+    if(typeof item.product !== "string") item.product = item.name || "";
     // 舊版快取沒有 createdAt／updatedAt（用來讓列表預設依「最近更新」排序），補上預設值
     if(typeof item.createdAt !== "number") item.createdAt = 0;
     if(typeof item.updatedAt !== "number") item.updatedAt = item.createdAt;
@@ -4156,9 +4163,13 @@
     const subCategory = String(raw["子類別"] || "").trim();
     // 「新增時間」是後端寫入的建立時間；如果這欄是空的（例如很舊的資料），退而求其次用列號當作大略的新舊排序依據
     const createdAt = parseTimestamp(raw["新增時間"]) || (Number(raw["_row"]) || 0);
+    const brand = String(raw["品牌"] || "").trim();
+    const product = String(raw["品項名稱"] || "").trim();
     return {
       row: raw["_row"],
-      name: raw["品項名稱"] || "",
+      brand: brand,                              // 獨立的品牌欄（可空白）
+      product: product,                          // 不含品牌的品名
+      name: buildFullName(brand, product),       // 顯示／搜尋／比價用的完整名稱
       category: category || "未分類",
       subCategory: subCategory,
       grams: grams,
@@ -4206,7 +4217,8 @@
           headers: {"Content-Type": "text/plain;charset=utf-8"},
           body: JSON.stringify({
             action: "add",
-            name: job.name,
+            brand: job.brand || "",
+            name: job.product,
             category: job.category,
             subCategory: job.subCategory,
             grams: job.grams,
@@ -4249,7 +4261,8 @@
       return;
     }
     const productName = $("itemName").value.trim();
-    const name = buildFullName($("itemBrand").value, productName);
+    const brand = String($("itemBrand").value || "").replace(/\s+/g, "");
+    const name = buildFullName(brand, productName);
     const category = selectedParentCategory.trim();
     const subCategory = selectedSubCategories.join(",");
     const grams = parseFloat($("itemGrams").value);
@@ -4273,7 +4286,7 @@
     const cp = price / (grams * count);
 
     if(editingRow !== null){
-      submitUpdate(editingRow, { name, category, subCategory, grams, price, count, unitPrice, date, location });
+      submitUpdate(editingRow, { name, brand, product: productName, category, subCategory, grams, price, count, unitPrice, date, location });
       return;
     }
 
@@ -4283,7 +4296,7 @@
     items.unshift({
       row: tempId,
       tempId: tempId,
-      name, category, subCategory, grams, price, count, unitPrice, cp, date, location,
+      name, brand, product: productName, category, subCategory, grams, price, count, unitPrice, cp, date, location,
       pending: true,
       uploadError: false,
       createdAt: Date.now(),
@@ -4303,16 +4316,11 @@
     formMsg.textContent = "";
     $("itemGrams").focus();
 
-    uploadQueue.push({ tempId, name, category, subCategory, grams, price, count, unitPrice, date, location });
+    uploadQueue.push({ tempId, name, brand, product: productName, category, subCategory, grams, price, count, unitPrice, date, location });
     processQueue();
   });
 
-  // ---------- 品牌（儲存格式仍是「品牌 品名」，所以試算表、舊資料都不用改） ----------
-  function splitBrandName(full){
-    const t = String(full || "").trim();
-    const m = t.match(/^(\S+)\s+([\s\S]+)$/);
-    return m ? { brand: m[1], product: m[2].trim() } : { brand: "", product: t };
-  }
+  // ---------- 品牌（試算表有獨立「品牌」欄；name＝品牌＋空格＋品名，只用在畫面顯示／搜尋／比價） ----------
   function buildFullName(brand, product){
     const b = String(brand || "").replace(/\s+/g, "");  // 品牌內的空格會干擾拆分，自動拿掉
     const n = String(product || "").trim();
@@ -4324,7 +4332,7 @@
     if(!dl || !chipsEl) return;
     const count = {};
     (items || []).forEach(it => {
-      const b = splitBrandName(it.name).brand;
+      const b = String(it.brand || "").trim();
       if(b) count[b] = (count[b] || 0) + 1;
     });
     const brands = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b, "zh-Hant"));
@@ -4363,11 +4371,8 @@
     $("itemGrams").value = item.grams;
     $("itemPrice").value = item.price;
     $("itemCount").value = item.count || 1;
-    {
-      const parts = splitBrandName(item.name);
-      $("itemBrand").value = parts.brand;
-      $("itemName").value = parts.product;
-    }
+    $("itemBrand").value = item.brand || "";
+    $("itemName").value = item.product !== undefined ? item.product : item.name;
     // 把這筆紀錄現有的主類別／子類別帶入表單，例如「果凍」→ 主類別「零食」、子類別「甜的」「健康的」，
     // 這樣編輯時可以直接看到、也可以直接修改子類別，儲存時會一併更新回試算表
     selectedSubCategories = subCategoriesOf(item);
@@ -4419,6 +4424,8 @@
     const target = items.find(i => i.row === row);
     if(target){
       target.name = fields.name;
+      target.brand = fields.brand;
+      target.product = fields.product;
       target.category = fields.category;
       target.subCategory = fields.subCategory;
       target.grams = fields.grams;
@@ -4441,7 +4448,7 @@
     fetch(scriptUrl, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({ action: "update", row, ...fields })
+      body: JSON.stringify({ action: "update", row, ...fields, name: fields.product, brand: fields.brand })
     }).then(async (res) => {
       let ok = true;
       try{

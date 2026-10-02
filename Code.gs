@@ -15,7 +15,14 @@
  *    把這組網址貼到網站的「設定同步網址」欄位
  *
  * 試算表第一列（標題列）請依序填入：
- * 品項名稱 | 類別 | 子類別 | 克數 | 價格 | 數量 | 單罐價格 | CP值 | 日期 | 地點 | 新增時間
+ * 品項名稱 | 品牌 | 類別 | 子類別 | 克數 | 價格 | 數量 | 單罐價格 | CP值 | 日期 | 地點 | 新增時間
+ *
+ * ℹ 「品牌」是獨立欄位、非必填（可以留空）。「品項名稱」只放品名，不含品牌。
+ *    從舊版升級不用手動插欄：貼上這份程式後，第一次開網頁（或任何一次讀取／寫入）時，
+ *    程式會自動在「品項名稱」右邊插入「品牌」欄；其餘欄位只是往右移一格，程式是依標題名稱
+ *    找欄位，不受位置影響。
+ *    舊資料的品牌原本是寫在名稱裡（例如「DHC 金靚白水亮防曬乳」），不會被自動更動；
+ *    想一次拆開，請打開試算表，選單「🧹 帳本維護」→「把舊資料的品牌拆到品牌欄」。
  *
  * 「類別」是主類別（必填，例如「零食」）；「子類別」是選填的細分類，可以複選
  * （例如「甜的,鹹的」，多個子類別用半形逗號分隔），沒有子類別時這一格留空即可。
@@ -121,7 +128,7 @@ const COMPARISON_LOG_SHEET_NAME = '比價紀錄';
 const COMPARISON_LOG_FIELDS = ['時間', '品項名稱', '對應列號', '容量', '數量', '售價', '換算CP值', '基準CP值', '結果', '地點'];
 
 // 欄位固定順序（對應試算表由左到右的欄）
-const FIELD_ORDER = ['品項名稱', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
+const FIELD_ORDER = ['品項名稱', '品牌', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
 
 function getSheet_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
@@ -129,6 +136,73 @@ function getSheet_() {
     throw new Error('找不到分頁「' + SHEET_NAME + '」，請確認 SHEET_NAME 設定是否正確');
   }
   return sheet;
+}
+
+// ---------- 品牌欄位 ----------
+const BRAND_HEADER = '品牌';
+
+// 確保工作表有「品牌」欄：沒有的話，自動插在「品項名稱」右邊。回傳整列標題（已去除前後空白）。
+function readHeaders_(sheet) {
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+}
+
+function ensureBrandColumn_(sheet) {
+  let headers = readHeaders_(sheet);
+  if (headers.indexOf(BRAND_HEADER) !== -1) return headers;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    headers = readHeaders_(sheet); // 進鎖之後再確認一次，避免兩個請求同時插入兩欄
+    if (headers.indexOf(BRAND_HEADER) === -1) {
+      const nameIdx = headers.indexOf('品項名稱');
+      if (nameIdx === -1) {
+        throw new Error('工作表1的標題列找不到「品項名稱」欄位，請確認欄位標題');
+      }
+      sheet.insertColumnAfter(nameIdx + 1);
+      sheet.getRange(1, nameIdx + 2).setValue(BRAND_HEADER);
+      SpreadsheetApp.flush();
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return readHeaders_(sheet);
+}
+
+// 取得品項工作表，並確保已有「品牌」欄
+function getItemSheet_() {
+  const sheet = getSheet_();
+  ensureBrandColumn_(sheet);
+  return sheet;
+}
+
+// 依標題列的實際順序組出一整列要寫入的值（欄位位置不固定也不會錯位）
+function buildRowByHeaders_(headers, f, createdAt) {
+  return headers.map(h => {
+    switch (h) {
+      case '品項名稱': return f.name;
+      case '品牌': return f.brand;
+      case '類別': return f.category;
+      case '子類別': return f.subCategory;
+      case '克數': return f.grams;
+      case '價格': return f.price;
+      case '數量': return f.count;
+      case '單罐價格': return f.unitPrice;
+      case 'CP值': return f.cp;
+      case '日期': return f.date;
+      case '地點': return f.location;
+      case '新增時間': return createdAt;
+      default: return '';
+    }
+  });
+}
+
+// 完整名稱（品牌＋空格＋品名），跟網頁顯示、比價紀錄裡存的「品項名稱」一致
+function fullName_(brand, name) {
+  const b = String(brand || '').trim();
+  const n = String(name || '').trim();
+  return b ? (b + ' ' + n) : n;
 }
 
 // 取得（或自動建立）存放類別排序的分頁
@@ -263,13 +337,14 @@ function appendComparisonLog_(body) {
 // 適用情境：直接在試算表手動改子類別文字、或手動刪除／搬移資料列之後，
 // 這兩個輔助分頁不會自動更新，跑這個函式把它們「照目前的主資料」重新校正一次。
 function repairAuxSheets_() {
-  const sheet = getSheet_();
+  const sheet = getItemSheet_();
   const values = sheet.getDataRange().getValues();
   const result = { removedOrderRows: 0, fixedLogRows: 0, unresolvedLogRows: 0 };
   if (values.length < 2) return result;
 
   const headers = values.shift();
   const nameIdx = headers.indexOf('品項名稱');
+  const brandIdx = headers.indexOf(BRAND_HEADER);
   const catIdx = headers.indexOf('類別');
   const subIdx = headers.indexOf('子類別');
   if (nameIdx === -1 || catIdx === -1 || subIdx === -1) {
@@ -280,7 +355,7 @@ function repairAuxSheets_() {
   const catMap = {}; // { 主類別: Set(子類別) }
   const nameToRows = {}; // { 品項名稱: [列號, ...] }
   values.forEach((row, i) => {
-    const name = String(row[nameIdx] || '').trim();
+    const name = fullName_(brandIdx === -1 ? '' : row[brandIdx], row[nameIdx]);
     const cat = String(row[catIdx] || '').trim();
     const subRaw = String(row[subIdx] || '').trim();
     if (!name || !cat) return;
@@ -346,11 +421,76 @@ function repairAuxSheets_() {
   return result;
 }
 
+// ---------- 舊資料拆品牌 ----------
+// 把「品牌」欄是空的、而品項名稱裡有空格的紀錄，拆成：第一個空格前 → 品牌；其餘 → 品項名稱。
+// 例如「DHC 金靚白水亮防曬乳」→ 品牌「DHC」、品項名稱「金靚白水亮防曬乳」。
+// 已經有品牌的紀錄、名稱裡沒有空格的紀錄（視為沒有品牌）都不會動。
+// dryRun = true 時只計算會影響幾筆，不寫入。
+function migrateBrands_(dryRun) {
+  const sheet = getItemSheet_();
+  const headers = readHeaders_(sheet);
+  const nameIdx = headers.indexOf('品項名稱');
+  const brandIdx = headers.indexOf(BRAND_HEADER);
+  const result = { toMigrate: 0, migrated: 0, alreadyHasBrand: 0, noSpace: 0 };
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return result;
+
+  const nameRange = sheet.getRange(2, nameIdx + 1, lastRow - 1, 1);
+  const brandRange = sheet.getRange(2, brandIdx + 1, lastRow - 1, 1);
+  const names = nameRange.getValues();
+  const brands = brandRange.getValues();
+
+  names.forEach((r, i) => {
+    const name = String(r[0] || '').trim();
+    const brand = String(brands[i][0] || '').trim();
+    if (!name) return;
+    if (brand) { result.alreadyHasBrand++; return; }
+    const m = name.match(/^(\S+)\s+([\s\S]+)$/);
+    if (!m) { result.noSpace++; return; }
+    result.toMigrate++;
+    brands[i][0] = m[1];
+    names[i][0] = m[2].trim();
+  });
+
+  if (!dryRun && result.toMigrate > 0) {
+    nameRange.setValues(names);
+    brandRange.setValues(brands);
+    result.migrated = result.toMigrate;
+  }
+  return result;
+}
+
+// 給選單按鈕呼叫：先試算影響幾筆，確認後才真的拆分
+function runMigrateBrands() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const preview = migrateBrands_(true);
+    if (preview.toMigrate === 0) {
+      ui.alert('沒有需要拆分的紀錄。\n\n（已有品牌：' + preview.alreadyHasBrand + ' 筆；名稱沒有空格、視為無品牌：' + preview.noSpace + ' 筆）');
+      return;
+    }
+    const answer = ui.alert(
+      '把舊資料的品牌拆到品牌欄',
+      '將有 ' + preview.toMigrate + ' 筆紀錄，把「品項名稱」第一個空格前的字移到「品牌」欄。\n' +
+      '（已有品牌 ' + preview.alreadyHasBrand + ' 筆、名稱沒有空格 ' + preview.noSpace + ' 筆，不會更動）\n\n' +
+      '⚠ 如果有名稱第一個字其實不是品牌，拆完需要自己到試算表手動調整。\n' +
+      '建議先複製一份試算表備份。要繼續嗎？',
+      ui.ButtonSet.YES_NO
+    );
+    if (answer !== ui.Button.YES) return;
+    const r = migrateBrands_(false);
+    ui.alert('✅ 完成，已拆分 ' + r.migrated + ' 筆。網頁按 ↻ 重新整理即可看到。');
+  } catch (err) {
+    ui.alert('❌ 拆分失敗：' + String(err));
+  }
+}
+
 // 試算表選單：打開試算表時自動加一個「🧹 帳本維護」選單，不用進 Apps Script 編輯器也能跑修復
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🧹 帳本維護')
     .addItem('修復子類別排序／比價紀錄同步', 'runRepairAuxSheets')
+    .addItem('把舊資料的品牌拆到品牌欄', 'runMigrateBrands')
     .addToUi();
 }
 
@@ -378,15 +518,16 @@ function jsonOut_(obj) {
 // 讀取所有品項
 function doGet(e) {
   try {
-    const sheet = getSheet_();
+    const sheet = getItemSheet_();
     const range = sheet.getDataRange();
     const values = range.getValues();
     if (values.length < 1) return jsonOut_({ status: 'ok', items: [] });
 
-    const headers = values.shift();
+    const headers = values.shift().map(h => String(h).trim());
+    const nameCol = headers.indexOf('品項名稱');
     const items = [];
     values.forEach((row, i) => {
-      if (!row[0]) return; // 跳過空白列
+      if (!row[nameCol === -1 ? 0 : nameCol]) return; // 跳過空白列（沒有品項名稱）
       const obj = {};
       headers.forEach((h, idx) => {
         let val = row[idx];
@@ -413,6 +554,8 @@ function doGet(e) {
 // 從 request body 整理出一筆品項的欄位，並做基本驗證
 function parseItemFields_(body) {
   const name = String(body.name || '').trim();
+  // 品牌（選填）：品牌內的空格一律拿掉，避免跟「品牌 品名」的顯示格式混淆
+  const brand = String(body.brand || '').replace(/\s+/g, '');
   const category = String(body.category || '').trim(); // 主類別（必填）
   // 子類別（選填，可複選）：前端可能傳陣列（多選）或字串，統一轉成用逗號分隔的字串存進試算表
   const subCategory = Array.isArray(body.subCategory)
@@ -431,7 +574,7 @@ function parseItemFields_(body) {
   const unitPrice = +(price / count).toFixed(2);
   const cp = +(price / (grams * count)).toFixed(4);
 
-  return { name, category, subCategory, grams, price, count, unitPrice, cp, date, location };
+  return { name, brand, category, subCategory, grams, price, count, unitPrice, cp, date, location };
 }
 
 // 新增 / 刪除 / 編輯品項
@@ -471,7 +614,14 @@ function doPost(e) {
       return jsonOut_({ status: 'ok' });
     }
 
-    const sheet = getSheet_();
+    // 一鍵把舊資料名稱裡的品牌拆到「品牌」欄（跟選單裡的按鈕是同一個函式；dryRun 只試算不寫入）
+    if (body.action === 'migrateBrands') {
+      const result = migrateBrands_(!!body.dryRun);
+      return jsonOut_({ status: 'ok', result });
+    }
+
+    const sheet = getItemSheet_();
+    const headers = readHeaders_(sheet);
 
     if (body.action === 'delete') {
       const row = Number(body.row);
@@ -485,18 +635,21 @@ function doPost(e) {
       if (row < 2) throw new Error('無效的列號');
       const f = parseItemFields_(body);
 
-      // 更新前 10 欄（品項名稱～地點），第 11 欄「新增時間」維護原本紀錄不變
-      sheet.getRange(row, 1, 1, 10).setValues([[
-        f.name, f.category, f.subCategory, f.grams, f.price, f.count, f.unitPrice, f.cp, f.date, f.location
-      ]]);
+      // 依標題名稱更新各欄；「新增時間」以及其他不認識的欄位維持原本內容不變
+      const range = sheet.getRange(row, 1, 1, headers.length);
+      const current = range.getValues()[0];
+      const updated = buildRowByHeaders_(headers, f, null);
+      const managed = ['品項名稱', '品牌', '類別', '子類別', '克數', '價格', '數量', '單罐價格', 'CP值', '日期', '地點'];
+      headers.forEach((h, i) => {
+        if (managed.indexOf(h) !== -1) current[i] = updated[i];
+      });
+      range.setValues([current]);
       return jsonOut_({ status: 'ok', row, cp: f.cp, unitPrice: f.unitPrice });
     }
 
     // 預設為新增品項
     const f = parseItemFields_(body);
-    sheet.appendRow([
-      f.name, f.category, f.subCategory, f.grams, f.price, f.count, f.unitPrice, f.cp, f.date, f.location, new Date()
-    ]);
+    sheet.appendRow(buildRowByHeaders_(headers, f, new Date()));
 
     // 直接回傳這筆新資料實際寫入的列號，前端就不需要再整張表重新讀取一次
     const row = sheet.getLastRow();
