@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>CP值紀錄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1723,6 +1723,81 @@
     body{padding-bottom:calc(40px + env(safe-area-inset-bottom, 0px));}
   }
 
+  /* ================= 手機版面修正：彈窗／編輯面板超出畫面 =================
+     --vv-top / --vv-h / --vv-bottom 由底部 script 依「實際可見區域」(visualViewport) 更新，
+     鍵盤彈出、網址列伸縮時，彈窗仍然剛好貼合可見範圍，內容超出就在彈窗內捲動。 */
+  :root{
+    --vv-top:0px;
+    --vv-h:100vh;
+    --vv-bottom:0px;
+  }
+  @supports (height:100dvh){
+    :root{ --vv-h:100dvh; }
+  }
+
+  /* 比價彈窗：原本是 height:100% + 置中且卡片沒有捲動，內容一高就上下被切掉 */
+  #compareModal{
+    display:none;
+    position:fixed;
+    left:0;
+    top:var(--vv-top);
+    width:100%;
+    height:var(--vv-h);
+    background:rgba(0,0,0,.5);
+    z-index:1000;
+    align-items:flex-start;
+    justify-content:center;
+    padding:max(16px, env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  #compareModal .compare-box{
+    width:100%;
+    max-width:400px;
+    margin:auto;          /* 內容少時置中，內容多時從頂端開始、整個彈窗可捲動 */
+    background:var(--white);
+    flex:none;
+  }
+
+  /* 其他彈窗：高度跟著可見區域，鍵盤出現時不會被蓋住 */
+  .app-modal-backdrop{
+    top:var(--vv-top);
+    bottom:auto;
+    height:var(--vv-h);
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .app-modal-box.tall{ max-height:min(calc(var(--vv-h) - 48px), 720px); }
+  @media (max-width:560px){
+    .app-modal-box.tall{ max-height:100%; }
+  }
+
+  /* 編輯面板：貼在可見區域底部（鍵盤上方），高度不超過可見區域 */
+  #addFormCard.editing-mode{
+    bottom:calc(14px + var(--vv-bottom));
+    max-height:calc(var(--vv-h) - 28px);
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    scroll-padding-bottom:24px;
+  }
+  @media (max-width:640px){
+    #addFormCard.editing-mode{
+      bottom:calc(8px + var(--vv-bottom) + env(safe-area-inset-bottom, 0px));
+      max-height:calc(var(--vv-h) - 16px - env(safe-area-inset-bottom, 0px));
+      padding:18px 14px 20px;
+    }
+    /* 手機上三欄太擠，改兩欄 */
+    form#addForm, .calc-grid{ grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width:380px){
+    form#addForm, .calc-grid{ grid-template-columns:1fr; }
+  }
+  /* 防止寬內容把整個頁面撐出橫向捲軸 */
+  html, body{ overflow-x:hidden; max-width:100%; }
+  .field, .field > *{ min-width:0; }
+  .chips, .leaderboard-strip{ max-width:100%; }
+
 </style>
 </head>
 <body>
@@ -1924,8 +1999,8 @@
 </div>
 
 <!-- 比價彈窗 Modal -->
-<div id="compareModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-  <div class="tag-card" style="width:90%; max-width:400px; margin:0; background:var(--white);">
+<div id="compareModal">
+  <div class="tag-card compare-box">
     <p class="card-title">快速比價計算</p>
     <div style="font-size:15px; margin-bottom:6px; font-weight:700; text-align:center;" id="modalItemName">-</div>
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:16px; text-align:center;">
@@ -3550,6 +3625,15 @@
 
   // ---------- 快速比價 Modal 邏輯 ----------
   const compareModal = $("compareModal");
+  function showCompareModal(){
+    compareModal.style.display = "flex";
+    compareModal.scrollTop = 0;
+    document.body.style.overflow = "hidden";
+  }
+  function hideCompareModal(){
+    compareModal.style.display = "none";
+    if(!document.querySelector(".app-modal-backdrop.show")) document.body.style.overflow = "";
+  }
   const modalItemName = $("modalItemName");
   const modalBaseCp = $("modalBaseCp");
   const modalGrams = $("modalGrams");
@@ -3686,7 +3770,7 @@
     modalSaveMsg.textContent = "";
     renderCountShortcuts(item);
     renderCompareHistory(item.name);
-    compareModal.style.display = "flex";
+    showCompareModal();
     calcComparison();
     modalGrams.focus();
     modalGrams.select();
@@ -3853,7 +3937,7 @@
     modalSaveMsg.textContent = "✓ 已加入紀錄，背景同步中…";
     modalSaveMsg.style.color = "var(--green)";
     setTimeout(() => {
-      compareModal.style.display = "none";
+      hideCompareModal();
     }, 900);
   }
 
@@ -3921,11 +4005,11 @@
   modalSaveBtn.addEventListener("click", saveCompareAsNewRecord);
 
   closeModalBtn.addEventListener("click", () => {
-    compareModal.style.display = "none";
+    hideCompareModal();
   });
 
   compareModal.addEventListener("click", (e) => {
-    if(e.target === compareModal) compareModal.style.display = "none";
+    if(e.target === compareModal) hideCompareModal();
   });
 
   // ---------- 設定 ----------
@@ -4851,6 +4935,37 @@
     }catch(e){}
   }
   loadItems();
+
+  // ---------- 手機可見範圍追蹤（鍵盤彈出／網址列伸縮時，彈窗仍貼合畫面） ----------
+  (function(){
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    function updateViewportVars(){
+      const h = vv ? vv.height : window.innerHeight;
+      const top = vv ? vv.offsetTop : 0;
+      const bottom = Math.max(0, window.innerHeight - h - top);
+      root.style.setProperty("--vv-h", h + "px");
+      root.style.setProperty("--vv-top", top + "px");
+      root.style.setProperty("--vv-bottom", bottom + "px");
+    }
+    updateViewportVars();
+    if(vv){
+      vv.addEventListener("resize", updateViewportVars);
+      vv.addEventListener("scroll", updateViewportVars);
+    }
+    window.addEventListener("resize", updateViewportVars);
+    window.addEventListener("orientationchange", () => setTimeout(updateViewportVars, 200));
+
+    // 點到輸入框時，若在彈窗／編輯面板內，等鍵盤出來後把它捲到可見位置
+    document.addEventListener("focusin", (e) => {
+      const t = e.target;
+      if(!t || !t.matches || !t.matches("input, select, textarea")) return;
+      if(!t.closest("#compareModal, .app-modal-backdrop, #addFormCard.editing-mode")) return;
+      setTimeout(() => {
+        try{ t.scrollIntoView({ block:"center", behavior:"smooth" }); }catch(_){}
+      }, 300);
+    });
+  })();
 
 })();
 </script>
