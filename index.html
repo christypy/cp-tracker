@@ -2048,9 +2048,9 @@
     overflow-wrap:anywhere;
   }
   #formMsg:empty{display:none;}
-  #formMsg.msg-saving{color:var(--amber); font-weight:700;}
-  #formMsg.msg-ok{color:var(--green); font-weight:700;}
-  #formMsg.msg-error{
+  .status-msg.msg-saving{color:var(--amber); font-weight:700;}
+  .status-msg.msg-ok{color:var(--green); font-weight:700;}
+  .status-msg.msg-error{
     color:var(--red);
     font-weight:700;
     background:rgba(193,85,44,.08);
@@ -2058,7 +2058,7 @@
     border-radius:10px;
     padding:10px 12px;
   }
-  #formMsg .msg-spin{
+  .msg-spin{
     width:14px; height:14px; flex:none;
     border:2px solid currentColor;
     border-right-color:transparent;
@@ -2066,7 +2066,7 @@
     animation:msgSpin .8s linear infinite;
   }
   @keyframes msgSpin{ to{ transform:rotate(360deg); } }
-  #formMsg .msg-retry{
+  .msg-retry{
     font:inherit;
     font-size:13px;
     font-weight:700;
@@ -2089,8 +2089,43 @@
   }
   .p-badge.err{background:rgba(193,85,44,.14); color:var(--red); font-weight:700;}
   @media (prefers-reduced-motion:reduce){
-    #formMsg .msg-spin{animation:none;}
+    .msg-spin{animation:none;}
   }
+
+  /* ============ 新增品項改成彈跳視窗 ============ */
+  #openAddBtnTop{
+    width:100%; min-height:52px; font:inherit; font-size:17px; font-weight:900;
+    border:none; border-radius:16px; background:var(--ink); color:var(--paper); cursor:pointer;
+    box-shadow:0 10px 24px -14px rgba(43,40,32,.7);
+  }
+  #openAddBtn{
+    position:fixed; left:16px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:480;
+    min-height:46px; padding:0 20px; font:inherit; font-size:15px; font-weight:900;
+    border:none; border-radius:999px; background:var(--green); color:#fff; cursor:pointer;
+    box-shadow:0 8px 20px -8px rgba(43,40,32,.6);
+  }
+  body{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px));}
+  .app-modal-box.tall > .add-modal-body{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:2px 2px 8px;}
+  #addKeepBtn{
+    grid-column:1/-1; font:inherit; font-size:15px; font-weight:700; min-height:46px; padding:10px;
+    border:1px solid var(--green); border-radius:8px; background:var(--white); color:var(--green);
+    cursor:pointer; white-space:normal;
+  }
+  #addBtn{white-space:normal;}
+  /* 主／子類別：放在表單最上面，標籤精簡成「名稱＋筆數」，加大點擊範圍，一點就選 */
+  #addModal #formCategoryLeaderboard .lb-rank, #addModal #formCategoryLeaderboard .lb-avg,
+  #addModal #categoryChildCheckboxes .lb-rank, #addModal #categoryChildCheckboxes .lb-avg{display:none;}
+  #addModal #formCategoryLeaderboard .leaderboard-chip,
+  #addModal #categoryChildCheckboxes .leaderboard-chip{min-height:44px; padding:8px 16px; font-size:15px;}
+  #addModal #formCategoryLeaderboard .lb-name, #addModal #categoryChildCheckboxes .lb-name{font-size:15px;}
+  #addModal #categoryChildCheckboxes .leaderboard-chip.sub{border-style:dashed;}
+  #saveToast{
+    display:none; position:fixed; left:12px; right:70px; bottom:calc(76px + env(safe-area-inset-bottom,0px));
+    max-width:460px; z-index:520; background:var(--white); border:1px solid var(--line); border-radius:14px;
+    padding:10px 14px; box-shadow:0 10px 30px -10px rgba(43,40,32,.5);
+    justify-content:center; align-items:center; flex-wrap:wrap; gap:8px; font-size:14px; line-height:1.5; overflow-wrap:anywhere;
+  }
+  #saveToast.show{display:flex;}
 
 </style>
 </head>
@@ -2124,77 +2159,7 @@
 
 <main>
 
-  <!-- 新增品項（先算再填資料） -->
-  <section class="tag-card" id="addFormCard">
-    <p class="card-title" id="formTitle">新增品項</p>
-    <form id="addForm">
-      <div class="edit-hint" id="editHint" style="display:none;"></div>
-      <div class="field">
-        <label for="itemGrams">單罐克數 (g)</label>
-        <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
-      </div>
-      <div class="field">
-        <label for="itemPrice">總價格 ($)</label>
-        <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
-      </div>
-      <div class="field">
-        <label for="itemCount">數量 (入/罐)</label>
-        <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="例如 1" required>
-      </div>
-
-      <div class="calc-result">
-        <div class="stamp mono" id="calcStamp">
-          --<small>$ / g</small>
-          <div class="unit-p" id="unitPricePreview">單罐 --</div>
-        </div>
-      </div>
-
-      <div class="field full">
-        <label for="itemBrand">品牌 <span style="color:var(--ink-soft);font-weight:400;">（可選，點選或直接輸入）</span></label>
-        <input type="text" id="itemBrand" list="brandList" placeholder="例如 DHC" autocomplete="off" autocapitalize="off">
-        <datalist id="brandList"></datalist>
-        <div class="chips" id="brandChips"></div>
-      </div>
-      <div class="field full">
-        <label for="itemName">品項名稱</label>
-        <input type="text" id="itemName" placeholder="例如 金靚白水亮防曬乳（不用再打品牌）" required>
-      </div>
-      <div class="field full">
-        <label>主類別 <span style="color:var(--red);">*必填</span><span class="cat-field-hint">點擊下方 CP值排行榜的標籤即可選為主類別</span></label>
-        <div id="formCategoryLeaderboard"></div>
-        <button type="button" class="cat-manual-btn" id="categoryParentManualBtn">新增主類別</button>
-        <div class="cat-manual-row" id="categoryParentManualRow" style="display:none;">
-          <input type="text" id="categoryParentManualInput" placeholder="輸入新主類別名稱" autocomplete="off">
-          <button type="button" id="categoryParentManualAddBtn">加入</button>
-        </div>
-      </div>
-      <div class="field full" id="childCategoryField" style="display:none;">
-        <label>子類別（選填，可複選）<span class="cat-field-hint">點擊排行榜標籤可切換選取／取消</span></label>
-        <div id="categoryChildCheckboxes"></div>
-        <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
-          <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
-          <button type="button" id="categoryChildManualAddBtn">加入</button>
-        </div>
-        <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
-      </div>
-      <div class="field full">
-        <div class="live-rank-preview" id="liveRankPreview"></div>
-      </div>
-      <div class="field full">
-        <label for="itemDate">日期</label>
-        <input type="date" id="itemDate">
-      </div>
-      <div class="field full">
-        <label>購買地點<span class="cat-field-hint">點擊即可選取，越常用的地點排越前面</span></label>
-        <div class="leaderboard-strip" id="itemLocation"></div>
-        <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
-      </div>
-
-      <button type="submit" id="addBtn">加入紀錄</button>
-      <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
-      <div id="formMsg"></div>
-    </form>
-  </section>
+  <button type="button" id="openAddBtnTop">＋ 新增品項</button>
 
   <!-- 產品列表（頁面內區塊，不再是彈跳視窗；懸浮按鈕只負責快速捲動到這裡） -->
   <section class="tag-card" id="listSection">
@@ -2229,6 +2194,89 @@
   </section>
 
 </main>
+
+<!-- 新增／編輯品項彈跳視窗 -->
+<div id="addModal" class="app-modal-backdrop">
+  <div class="app-modal-box tall" id="addFormCard">
+    <div class="app-modal-header">
+      <p class="card-title" id="formTitle">新增品項</p>
+      <button type="button" class="app-modal-close" id="closeAddModalBtn">關閉 ✕</button>
+    </div>
+    <div class="add-modal-body">
+<form id="addForm">
+      <div class="edit-hint" id="editHint" style="display:none;"></div>
+      <div class="field full">
+        <label>主類別 <span style="color:var(--red);">*必填</span><span class="cat-field-hint">點一下標籤即可選取</span></label>
+        <div id="formCategoryLeaderboard"></div>
+        <button type="button" class="cat-manual-btn" id="categoryParentManualBtn">新增主類別</button>
+        <div class="cat-manual-row" id="categoryParentManualRow" style="display:none;">
+          <input type="text" id="categoryParentManualInput" placeholder="輸入新主類別名稱" autocomplete="off">
+          <button type="button" id="categoryParentManualAddBtn">加入</button>
+        </div>
+      </div>
+      <div class="field full" id="childCategoryField" style="display:none;">
+        <label>子類別（選填，可複選）<span class="cat-field-hint">點一下選取，再點一次取消</span></label>
+        <div id="categoryChildCheckboxes"></div>
+        <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
+          <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
+          <button type="button" id="categoryChildManualAddBtn">加入</button>
+        </div>
+        <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
+      </div>
+      <div class="field full">
+        <div class="live-rank-preview" id="liveRankPreview"></div>
+      </div>
+      <div class="field">
+        <label for="itemGrams">單罐克數 (g)</label>
+        <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
+      </div>
+      <div class="field">
+        <label for="itemPrice">總價格 ($)</label>
+        <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
+      </div>
+      <div class="field">
+        <label for="itemCount">數量 (入/罐)</label>
+        <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="例如 1" required>
+      </div>
+
+      <div class="calc-result">
+        <div class="stamp mono" id="calcStamp">
+          --<small>$ / g</small>
+          <div class="unit-p" id="unitPricePreview">單罐 --</div>
+        </div>
+      </div>
+
+      <div class="field full">
+        <label for="itemBrand">品牌 <span style="color:var(--ink-soft);font-weight:400;">（可選，點選或直接輸入）</span></label>
+        <input type="text" id="itemBrand" list="brandList" placeholder="例如 DHC" autocomplete="off" autocapitalize="off">
+        <datalist id="brandList"></datalist>
+        <div class="chips" id="brandChips"></div>
+      </div>
+      <div class="field full">
+        <label for="itemName">品項名稱</label>
+        <input type="text" id="itemName" placeholder="例如 金靚白水亮防曬乳（不用再打品牌）" required>
+      </div>
+      <div class="field full">
+        <label for="itemDate">日期</label>
+        <input type="date" id="itemDate">
+      </div>
+      <div class="field full">
+        <label>購買地點<span class="cat-field-hint">點擊即可選取，越常用的地點排越前面</span></label>
+        <div class="leaderboard-strip" id="itemLocation"></div>
+        <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
+      </div>
+
+      <button type="submit" id="addBtn">加入紀錄</button>
+      <button type="submit" id="addKeepBtn">加入並繼續新增</button>
+      <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
+      <div id="formMsg"></div>
+    </form>
+    </div>
+  </div>
+</div>
+
+<button type="button" id="openAddBtn">＋ 新增品項</button>
+<div id="saveToast" class="status-msg"></div>
 
 <!-- 設定同步網址彈跳視窗 -->
 <div id="settingsModal" class="app-modal-backdrop">
@@ -4479,31 +4527,35 @@
   const SAVE_TIMEOUT_MS = 20000;
   let formMsgTimer = null;
 
+  const saveToast = $("saveToast");
   function setFormStatus(kind, text, retryFn){
     clearTimeout(formMsgTimer);
-    formMsg.className = kind ? ("msg-" + kind) : "";
-    formMsg.innerHTML = "";
-    if(!text) return;
-    if(kind === "saving"){
-      const spin = document.createElement("span");
-      spin.className = "msg-spin";
-      formMsg.appendChild(spin);
-    }
-    const t = document.createElement("span");
-    t.textContent = text;
-    formMsg.appendChild(t);
-    if(retryFn){
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "msg-retry";
-      b.textContent = "重試";
-      b.addEventListener("click", retryFn);
-      formMsg.appendChild(b);
-    }
-    if(kind === "ok"){
-      formMsgTimer = setTimeout(() => setFormStatus("", ""), 3500);
-    }
+    const modalOpen = $("addModal").classList.contains("show");
+    [formMsg, saveToast].forEach(el => {
+      el.className = "status-msg" + (kind ? " msg-" + kind : "");
+      el.innerHTML = "";
+      if(!text) return;
+      if(kind === "saving"){
+        const spin = document.createElement("span");
+        spin.className = "msg-spin";
+        el.appendChild(spin);
+      }
+      const t = document.createElement("span");
+      t.textContent = text;
+      el.appendChild(t);
+      if(retryFn){
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "msg-retry";
+        b.textContent = "重試";
+        b.addEventListener("click", retryFn);
+        el.appendChild(b);
+      }
+    });
+    saveToast.classList.toggle("show", !!text && !modalOpen);
+    if(kind === "ok") formMsgTimer = setTimeout(() => setFormStatus("", ""), 3500);
   }
+  saveToast.addEventListener("click", (e) => { if(!e.target.closest("button")) setFormStatus("", ""); });
 
   // 按鈕短暫顯示「✓ 已加入」，讓人知道按下去有反應
   let addBtnTimer = null;
@@ -4663,8 +4715,11 @@
     }, 4000);
   }
 
+  let keepAddOpen = false;
   $("addForm").addEventListener("submit", (e) => {
     e.preventDefault();
+    const keepOpen = keepAddOpen;
+    keepAddOpen = false;
     if(!scriptUrl){
       setFormStatus("error", "請先點上方「⚙ 設定同步網址」貼上 Apps Script 網址");
       return;
@@ -4723,9 +4778,14 @@
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
     resetCategorySelection();
     renderBrandOptions();
-    flashAddBtn("✓ 已加入");
+    if(keepOpen){
+      flashAddBtn("✓ 已加入");
+      const body = document.querySelector(".add-modal-body");
+      if(body) body.scrollTop = 0;
+    } else {
+      closeAppModal("addModal");
+    }
     setFormStatus("saving", "儲存中…");
-    $("itemGrams").focus();
 
     uploadQueue.push({ tempId, name, brand, product: productName, category, subCategory, grams, price, count, unitPrice, date, location });
     processQueue();
@@ -4802,9 +4862,8 @@
     editHint.textContent = `✎ 正在編輯「${item.name}」，改完按「更新紀錄」即可，不用捲動頁面`;
     editHint.style.display = "block";
     // 編輯表單固定在畫面下方，點列表其他項目時不用再往上滑
-    addFormCard.classList.add("editing-mode");
-    editBackdrop.style.display = "block";
-    $("itemGrams").focus();
+    $("addKeepBtn").style.display = "none";
+    openAppModal("addModal");
   }
 
   function endEdit(){
@@ -4820,11 +4879,20 @@
     addBtn.textContent = "加入紀錄";
     cancelEditBtn.style.display = "none";
     editHint.style.display = "none";
-    addFormCard.classList.remove("editing-mode");
-    editBackdrop.style.display = "none";
+    $("addKeepBtn").style.display = "";
+    closeAppModal("addModal");
   }
 
   cancelEditBtn.addEventListener("click", endEdit);
+
+  function openAddModal(){
+    if(editingRow !== null) endEdit();
+    setFormStatus("", "");
+    openAppModal("addModal");
+  }
+  ["openAddBtn", "openAddBtnTop"].forEach(id => { const b = $(id); if(b) b.addEventListener("click", openAddModal); });
+  $("closeAddModalBtn").addEventListener("click", () => { if(editingRow !== null) endEdit(); else closeAppModal("addModal"); });
+  $("addKeepBtn").addEventListener("click", () => { keepAddOpen = true; });
   editBackdrop.addEventListener("click", endEdit);
 
   // 編輯後不再整張表重新讀取一次（那是造成「修改後同步很久」的主因：
