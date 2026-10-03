@@ -2783,6 +2783,7 @@
       </button>
     `).join("");
     formCategoryLeaderboard.innerHTML = `<div class="leaderboard-strip">${chipsHtml}</div>`;
+    renderBrandOptions();
 
     formCategoryLeaderboard.querySelectorAll(".leaderboard-chip").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -2802,6 +2803,7 @@
     if(!parent){
       childCategoryField.style.display = "none";
       categoryChildCheckboxes.innerHTML = "";
+      renderBrandOptions();
       return;
     }
     childCategoryField.style.display = "";
@@ -2840,6 +2842,7 @@
         else addSelectedSubCategory(sub);
       });
     });
+    renderBrandOptions();
   }
 
   function addSelectedSubCategory(name){
@@ -4797,24 +4800,44 @@
     const n = String(product || "").trim();
     return b ? (b + " " + n) : n;
   }
+  // 品牌清單依表單目前選的主類別／子類別即時更新：
+  // 先看選取的子類別（有複選就取聯集），該子類別底下沒有品牌時退回整個主類別；沒選類別就顯示全部。
+  // 輸入框的自動完成（datalist）仍保留所有品牌，只是目前類別的品牌排在最前面。
+  function brandCountsFor(list){
+    const count = {};
+    list.forEach(it => {
+      const b = String(it.brand || "").trim();
+      if(b) count[b] = (count[b] || 0) + 1;
+    });
+    return count;
+  }
+  function sortedBrands(count){
+    return Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b, "zh-Hant"));
+  }
   function renderBrandOptions(){
     const dl = $("brandList");
     const chipsEl = $("brandChips");
     if(!dl || !chipsEl) return;
-    const count = {};
-    (items || []).forEach(it => {
-      const b = String(it.brand || "").trim();
-      if(b) count[b] = (count[b] || 0) + 1;
-    });
-    const brands = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b, "zh-Hant"));
+    const all = items || [];
+    const parent = selectedParentCategory;
+    let scoped = all;
+    if(parent){
+      scoped = all.filter(it => it.category === parent);
+      if(selectedSubCategories.length){
+        const bySub = scoped.filter(it => subCategoriesOf(it).some(sc => selectedSubCategories.includes(sc)));
+        if(sortedBrands(brandCountsFor(bySub)).length) scoped = bySub;
+      }
+    }
+    const scopedBrands = sortedBrands(brandCountsFor(scoped));
+    const rest = sortedBrands(brandCountsFor(all)).filter(b => !scopedBrands.includes(b));
     dl.innerHTML = "";
-    brands.forEach(b => {
+    scopedBrands.concat(rest).forEach(b => {
       const o = document.createElement("option");
       o.value = b;
       dl.appendChild(o);
     });
     chipsEl.innerHTML = "";
-    brands.slice(0, 8).forEach(b => {
+    scopedBrands.slice(0, 12).forEach(b => {
       const c = document.createElement("button");
       c.type = "button";
       c.className = "chip sub" + ($("itemBrand").value.trim() === b ? " active" : "");
