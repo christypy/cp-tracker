@@ -5238,7 +5238,7 @@
       avg: arr.reduce((sum, i) => sum + i.cp, 0) / arr.length,
       count: arr.length
     }));
-    stats.sort((a, b) => a.avg - b.avg);
+    stats.sort((a, b) => b.count - a.count || a.avg - b.avg); // 筆數多的排前面，筆數相同再依平均 CP 值
     return stats;
   }
 
