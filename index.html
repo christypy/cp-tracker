@@ -2127,6 +2127,51 @@
   }
   #saveToast.show{display:flex;}
 
+  /* ============ 新增視窗精簡版：少捲動、送出鈕固定在底部 ============ */
+  #addModal .app-modal-box{padding:10px 12px 0;}
+  #addModal .app-modal-header{margin-bottom:6px;}
+  #addModal .app-modal-header .card-title{font-size:16px;}
+  .app-modal-box.tall > .add-modal-body{padding:0 0 0;}
+  #addModal form#addForm{grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px 8px;}
+  #addModal form#addForm .w2{grid-column:span 2;}
+  #addModal form#addForm .w3{grid-column:span 3;}
+  #addModal form#addForm .w4{grid-column:span 4;}
+  #addModal .field{gap:4px;}
+  #addModal .field label{font-size:12px; margin:0;}
+  #addModal .field input{padding:8px 10px; font-size:16px;}
+  #addModal .cat-field-hint{display:none;}
+  #addModal .edit-hint{padding:6px 10px;}
+  #addModal .field:has(> #liveRankPreview:not(.show)){display:none;}
+  #addModal .live-rank-preview{margin-top:0; padding-top:6px;}
+  /* 克數／價格／數量同一排；算出的 CP 值與日期同一排 */
+  #addModal .calc-result{grid-column:span 3; margin:0; padding:0; border:0; justify-content:flex-start; align-self:end;}
+  #addModal .stamp{transform:none; font-size:17px; padding:4px 10px; border-width:2px; border-radius:8px; text-align:left;}
+  #addModal .stamp small{display:inline; margin-left:4px; font-size:10px;}
+  #addModal .stamp .unit-p{font-size:11px; margin-top:0;}
+  /* 類別／品牌／地點標籤：單排左右滑動，不再佔好幾行 */
+  #addModal .leaderboard-strip, #addModal #brandChips{
+    flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; gap:6px; padding-bottom:2px;
+  }
+  #addModal .leaderboard-strip::-webkit-scrollbar, #addModal #brandChips::-webkit-scrollbar{display:none;}
+  #addModal #brandChips{grid-column:1/-1; margin:0;}
+  #addModal .leaderboard-chip, #addModal #brandChips .chip{flex:none; white-space:nowrap; max-width:none;}
+  #addModal .leaderboard-chip .lb-name{white-space:nowrap;}
+  #addModal #formCategoryLeaderboard .leaderboard-chip,
+  #addModal #categoryChildCheckboxes .leaderboard-chip{min-height:38px; padding:6px 14px; font-size:14px;}
+  #addModal #formCategoryLeaderboard, #addModal #categoryChildCheckboxes{margin-bottom:4px;}
+  #addModal .cat-manual-btn{align-self:flex-start; min-height:32px; padding:4px 12px; font-size:12px;}
+  #addModal #categoryChildManualBtn{margin-top:2px;}
+  /* 送出按鈕列：固定在視窗底部，不用捲到最下面 */
+  .add-actions{
+    grid-column:1/-1; position:sticky; bottom:0; z-index:3; background:var(--white);
+    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px;
+    padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--line);
+  }
+  .add-actions #formMsg{grid-column:1/-1; min-height:0; margin:0; font-size:13px;}
+  .add-actions #addBtn, .add-actions #addKeepBtn{grid-column:auto; margin:0; min-height:46px; padding:8px; font-size:15px;}
+  .add-actions.editing #addBtn, .add-actions #cancelEditBtn{grid-column:1/-1;}
+  .add-actions #cancelEditBtn{margin:0; min-height:40px;}
+
 </style>
 </head>
 <body>
@@ -2226,16 +2271,16 @@
       <div class="field full">
         <div class="live-rank-preview" id="liveRankPreview"></div>
       </div>
-      <div class="field">
-        <label for="itemGrams">單罐克數 (g)</label>
+      <div class="field w2">
+        <label for="itemGrams">克數 (g)</label>
         <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
       </div>
-      <div class="field">
-        <label for="itemPrice">總價格 ($)</label>
+      <div class="field w2">
+        <label for="itemPrice">總價 ($)</label>
         <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
       </div>
-      <div class="field">
-        <label for="itemCount">數量 (入/罐)</label>
+      <div class="field w2">
+        <label for="itemCount">數量</label>
         <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="例如 1" required>
       </div>
 
@@ -2245,31 +2290,33 @@
           <div class="unit-p" id="unitPricePreview">單罐 --</div>
         </div>
       </div>
-
-      <div class="field full">
-        <label for="itemBrand">品牌 <span style="color:var(--ink-soft);font-weight:400;">（可選，點選或直接輸入）</span></label>
-        <input type="text" id="itemBrand" list="brandList" placeholder="例如 DHC" autocomplete="off" autocapitalize="off">
-        <datalist id="brandList"></datalist>
-        <div class="chips" id="brandChips"></div>
-      </div>
-      <div class="field full">
-        <label for="itemName">品項名稱</label>
-        <input type="text" id="itemName" placeholder="例如 金靚白水亮防曬乳（不用再打品牌）" required>
-      </div>
-      <div class="field full">
+      <div class="field w3">
         <label for="itemDate">日期</label>
         <input type="date" id="itemDate">
       </div>
+
+      <div class="field w2">
+        <label for="itemBrand">品牌（選填）</label>
+        <input type="text" id="itemBrand" list="brandList" placeholder="品牌" autocomplete="off" autocapitalize="off">
+        <datalist id="brandList"></datalist>
+      </div>
+      <div class="field w4">
+        <label for="itemName">品項名稱</label>
+        <input type="text" id="itemName" placeholder="品名（不用再打品牌）" required>
+      </div>
+      <div class="chips brand-row" id="brandChips"></div>
       <div class="field full">
         <label>購買地點<span class="cat-field-hint">點擊即可選取，越常用的地點排越前面</span></label>
         <div class="leaderboard-strip" id="itemLocation"></div>
         <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
       </div>
 
-      <button type="submit" id="addBtn">加入紀錄</button>
-      <button type="submit" id="addKeepBtn">加入並繼續新增</button>
-      <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
-      <div id="formMsg"></div>
+      <div class="add-actions">
+        <div id="formMsg"></div>
+        <button type="submit" id="addBtn">加入紀錄</button>
+        <button type="submit" id="addKeepBtn">加入並繼續</button>
+        <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
+      </div>
     </form>
     </div>
   </div>
@@ -4886,6 +4933,7 @@
     editHint.style.display = "block";
     // 編輯表單固定在畫面下方，點列表其他項目時不用再往上滑
     $("addKeepBtn").style.display = "none";
+    document.querySelector(".add-actions").classList.add("editing");
     openAppModal("addModal");
   }
 
@@ -4903,6 +4951,7 @@
     cancelEditBtn.style.display = "none";
     editHint.style.display = "none";
     $("addKeepBtn").style.display = "";
+    document.querySelector(".add-actions").classList.remove("editing");
     closeAppModal("addModal");
   }
 
