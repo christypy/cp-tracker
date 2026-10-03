@@ -2099,7 +2099,7 @@
     box-shadow:0 10px 24px -14px rgba(43,40,32,.7);
   }
   #openAddBtn{
-    position:fixed; left:16px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:480;
+    position:fixed; right:16px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:480;
     min-height:46px; padding:0 20px; font:inherit; font-size:15px; font-weight:900;
     border:none; border-radius:999px; background:var(--green); color:#fff; cursor:pointer;
     box-shadow:0 8px 20px -8px rgba(43,40,32,.6);
@@ -2181,6 +2181,10 @@
   #addModal .add-actions button{grid-column:auto; margin:0; min-height:48px; padding:8px; font-size:16px; border-radius:12px; white-space:normal;}
   #addModal .add-actions.editing #addBtn, #addModal .add-actions #cancelEditBtn{grid-column:1/-1;}
   #addModal .add-actions #cancelEditBtn{min-height:42px; font-size:14px;}
+
+  /* 新增按鈕在右下角；回到最上／最下的箭頭往上疊在它上方 */
+  #backToTopBtn{bottom:calc(76px + env(safe-area-inset-bottom,0px));}
+  #scrollToBottomBtn{bottom:calc(126px + env(safe-area-inset-bottom,0px));}
 
 </style>
 </head>
