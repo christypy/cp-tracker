@@ -177,6 +177,14 @@ function getItemSheet_() {
   return sheet;
 }
 
+// 同上，但一併回傳標題列（ensureBrandColumn_ 本來就已經讀過一次標題列，
+// 直接沿用，避免 doPost 再多讀一次試算表，每次新增／編輯都能少一趟 Sheets 呼叫）
+function getItemSheetWithHeaders_() {
+  const sheet = getSheet_();
+  const headers = ensureBrandColumn_(sheet);
+  return { sheet, headers };
+}
+
 // 依標題列的實際順序組出一整列要寫入的值（欄位位置不固定也不會錯位）
 function buildRowByHeaders_(headers, f, createdAt) {
   return headers.map(h => {
@@ -620,8 +628,9 @@ function doPost(e) {
       return jsonOut_({ status: 'ok', result });
     }
 
-    const sheet = getItemSheet_();
-    const headers = readHeaders_(sheet);
+    const ctx = getItemSheetWithHeaders_();
+    const sheet = ctx.sheet;
+    const headers = ctx.headers;
 
     if (body.action === 'delete') {
       const row = Number(body.row);

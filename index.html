@@ -2035,6 +2035,63 @@
     .chip{padding:8px 12px;}
   }
 
+  /* ============================================================
+     儲存狀態回饋（按鈕與訊息列）
+     ============================================================ */
+  #formMsg{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    line-height:1.5;
+    overflow-wrap:anywhere;
+  }
+  #formMsg:empty{display:none;}
+  #formMsg.msg-saving{color:var(--amber); font-weight:700;}
+  #formMsg.msg-ok{color:var(--green); font-weight:700;}
+  #formMsg.msg-error{
+    color:var(--red);
+    font-weight:700;
+    background:rgba(193,85,44,.08);
+    border:1px solid rgba(193,85,44,.35);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  #formMsg .msg-spin{
+    width:14px; height:14px; flex:none;
+    border:2px solid currentColor;
+    border-right-color:transparent;
+    border-radius:50%;
+    animation:msgSpin .8s linear infinite;
+  }
+  @keyframes msgSpin{ to{ transform:rotate(360deg); } }
+  #formMsg .msg-retry{
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    padding:8px 16px;
+    min-height:38px;
+    border-radius:8px;
+    border:1px solid var(--red);
+    background:var(--red);
+    color:#fff;
+    cursor:pointer;
+  }
+  #addBtn.is-saved{background:var(--green);}
+  .field.field-error > label{color:var(--red); font-weight:700;}
+  .field.field-error input,
+  .field.field-error #formCategoryLeaderboard,
+  .field.field-error .leaderboard-strip{
+    outline:2px solid var(--red);
+    outline-offset:2px;
+    border-radius:8px;
+  }
+  .p-badge.err{background:rgba(193,85,44,.14); color:var(--red); font-weight:700;}
+  @media (prefers-reduced-motion:reduce){
+    #formMsg .msg-spin{animation:none;}
+  }
+
 </style>
 </head>
 <body>
@@ -4263,7 +4320,7 @@
   $("saveUrlBtn").addEventListener("click", () => {
     scriptUrl = scriptUrlInput.value.trim();
     localStorage.setItem(LS_URL_KEY, scriptUrl);
-    formMsg.textContent = "";
+    setFormStatus("", "");
     loadItems();
   });
 
@@ -4418,11 +4475,100 @@
   let isProcessingQueue = false;
   let tempIdCounter = 0;
 
+  // ---------- 表單儲存狀態（顯示在「加入紀錄」按鈕正下方，不用捲到頁面最上方看同步列） ----------
+  const SAVE_TIMEOUT_MS = 20000;
+  let formMsgTimer = null;
+
+  function setFormStatus(kind, text, retryFn){
+    clearTimeout(formMsgTimer);
+    formMsg.className = kind ? ("msg-" + kind) : "";
+    formMsg.innerHTML = "";
+    if(!text) return;
+    if(kind === "saving"){
+      const spin = document.createElement("span");
+      spin.className = "msg-spin";
+      formMsg.appendChild(spin);
+    }
+    const t = document.createElement("span");
+    t.textContent = text;
+    formMsg.appendChild(t);
+    if(retryFn){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "msg-retry";
+      b.textContent = "重試";
+      b.addEventListener("click", retryFn);
+      formMsg.appendChild(b);
+    }
+    if(kind === "ok"){
+      formMsgTimer = setTimeout(() => setFormStatus("", ""), 3500);
+    }
+  }
+
+  // 按鈕短暫顯示「✓ 已加入」，讓人知道按下去有反應
+  let addBtnTimer = null;
+  function flashAddBtn(text){
+    clearTimeout(addBtnTimer);
+    addBtn.textContent = text;
+    addBtn.classList.add("is-saved");
+    addBtnTimer = setTimeout(() => {
+      addBtn.classList.remove("is-saved");
+      addBtn.textContent = editingRow !== null ? "更新紀錄" : "加入紀錄";
+    }, 1200);
+  }
+
+  // 帶逾時的 POST：Apps Script 偶爾會卡住，超過時間就中斷並回報，不再無限等待
+  async function postWithTimeout(body, timeoutMs){
+    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs || SAVE_TIMEOUT_MS) : null;
+    try{
+      const res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      const text = await res.text();
+      let data;
+      try{ data = JSON.parse(text); }
+      catch(e){
+        if(text.trim().slice(0, 1) === "<") throw new Error("Google 回傳了網頁而非資料，請確認 Apps Script 部署權限為「任何人」");
+        throw new Error("伺服器回應格式錯誤");
+      }
+      return data;
+    }catch(err){
+      if(err && err.name === "AbortError"){
+        const e2 = new Error("連線逾時（超過 " + Math.round((timeoutMs || SAVE_TIMEOUT_MS) / 1000) + " 秒）");
+        e2.timeout = true;
+        throw e2;
+      }
+      throw err;
+    }finally{
+      if(timer) clearTimeout(timer);
+    }
+  }
+
   function updateQueueStatus(){
     const n = uploadQueue.length + (isProcessingQueue ? 1 : 0);
     if(n > 0){
       setSyncState("syncing", "背景上傳中…（剩餘 " + n + " 筆）");
+      setFormStatus("saving", "儲存中…（剩餘 " + n + " 筆）");
     }
+  }
+
+  // 失敗的上傳不再默默丟掉：留在 failedJobs，讓使用者按「重試」重新送出
+  const failedJobs = [];
+
+  function retryFailedJobs(){
+    if(failedJobs.length === 0) return;
+    failedJobs.splice(0).forEach(job => {
+      const it = items.find(i => i.tempId === job.tempId);
+      if(it) it.uploadError = false;
+      job.failed = false;
+      uploadQueue.push(job);
+    });
+    renderTable();
+    processQueue();
   }
 
   // 新增品項送出後，Apps Script 會直接回傳這筆資料實際寫入的列號（row），
@@ -4431,33 +4577,29 @@
   async function processQueue(){
     if(isProcessingQueue) return;
     isProcessingQueue = true;
-    let anySucceeded = false;
+    let okCount = 0;
+    let lastErr = null;
     while(uploadQueue.length > 0){
       const job = uploadQueue[0];
       updateQueueStatus();
       const stillPending = items.find(i => i.tempId === job.tempId);
       try{
-        const res = await fetch(scriptUrl, {
-          method: "POST",
-          headers: {"Content-Type": "text/plain;charset=utf-8"},
-          body: JSON.stringify({
-            action: "add",
-            brand: job.brand || "",
-            name: job.product,
-            category: job.category,
-            subCategory: job.subCategory,
-            grams: job.grams,
-            price: job.price,
-            count: job.count,
-            unitPrice: job.unitPrice,
-            date: job.date,
-            location: job.location
-          })
+        const data = await postWithTimeout({
+          action: "add",
+          brand: job.brand || "",
+          name: job.product,
+          category: job.category,
+          subCategory: job.subCategory,
+          grams: job.grams,
+          price: job.price,
+          count: job.count,
+          unitPrice: job.unitPrice,
+          date: job.date,
+          location: job.location
         });
-        const data = JSON.parse(await res.text());
         if(data.status !== "ok") throw new Error(data.message || "新增失敗");
         job.failed = false;
-        anySucceeded = true;
+        okCount += 1;
         if(stillPending && data.row){
           stillPending.row = data.row;
           stillPending.pending = false;
@@ -4465,24 +4607,66 @@
         }
       }catch(err){
         job.failed = true;
+        job.timeout = !!(err && err.timeout);
+        lastErr = err;
+        failedJobs.push(job);
         if(stillPending){
           stillPending.uploadError = true;
         }
-        renderTable();
       }
       uploadQueue.shift();
+      renderTable();
     }
     isProcessingQueue = false;
     renderTable();
-    if(anySucceeded){
+
+    const failN = failedJobs.length;
+    if(failN > 0){
+      const timedOut = failedJobs.some(j => j.timeout);
+      setSyncState("error", "有 " + failN + " 筆上傳失敗");
+      setFormStatus("error",
+        "有 " + failN + " 筆沒有存成功：" + (lastErr ? lastErr.message : "未知錯誤") +
+        (timedOut ? "。逾時時資料可能已寫入，重試前建議先按頁面上方 ↻ 確認，避免重複" : ""),
+        retryFailedJobs);
+    } else if(okCount > 0){
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+      setFormStatus("ok", "✓ 已儲存" + (okCount > 1 ? "（" + okCount + " 筆）" : ""));
     }
+  }
+
+  // 找出表單中缺少或不正確的欄位，回傳 [{label, el, field}]（順序與畫面由上到下一致）
+  function collectFormProblems(v){
+    const list = [];
+    const add = (label, el) => list.push({ label, el, field: el ? el.closest(".field") : null });
+    if(!(v.grams > 0)) add("單罐克數", $("itemGrams"));
+    if(isNaN(v.price) || v.price < 0) add("總價格", $("itemPrice"));
+    if(v.count < 1) add("數量", $("itemCount"));
+    if(!v.productName) add("品項名稱", $("itemName"));
+    if(!v.category) add("主類別（請在排行榜點選一個）", $("formCategoryLeaderboard"));
+    if(v.locationSelect === "自行輸入" && !v.location) add("購買地點", itemLocationCustom);
+    return list;
+  }
+
+  function showFormProblems(problems){
+    document.querySelectorAll(".field.field-error").forEach(f => f.classList.remove("field-error"));
+    setFormStatus("error", "還缺這些欄位：" + problems.map(p => p.label).join("、"));
+    problems.forEach(p => { if(p.field) p.field.classList.add("field-error"); });
+    const first = problems[0];
+    if(first && first.el){
+      first.el.scrollIntoView({ behavior:"smooth", block:"center" });
+      if(typeof first.el.focus === "function" && first.el.tagName === "INPUT"){
+        try{ first.el.focus({ preventScroll:true }); }catch(e){ first.el.focus(); }
+      }
+    }
+    setTimeout(() => {
+      document.querySelectorAll(".field.field-error").forEach(f => f.classList.remove("field-error"));
+    }, 4000);
   }
 
   $("addForm").addEventListener("submit", (e) => {
     e.preventDefault();
     if(!scriptUrl){
-      formMsg.textContent = "請先設定同步網址";
+      setFormStatus("error", "請先點上方「⚙ 設定同步網址」貼上 Apps Script 網址");
       return;
     }
     const productName = $("itemName").value.trim();
@@ -4495,14 +4679,15 @@
     const count = parseInt($("itemCount").value, 10) || 1;
     const date = itemDateInput.value || "";
     const location = getLocationValue(itemLocationSelect, itemLocationCustom);
-    if(!productName || !name || !category || !(grams > 0) || isNaN(price) || price < 0 || count < 1){
-      formMsg.textContent = "請確認欄位都已正確填寫（主類別為必填，請在上方 CP值排行榜點選一個，子類別可留空）";
+    const problems = collectFormProblems({
+      productName, category, grams, price, count, location,
+      locationSelect: itemLocationSelect.value
+    });
+    if(problems.length > 0){
+      showFormProblems(problems);
       return;
     }
-    if(itemLocationSelect.value === "自行輸入" && !location){
-      formMsg.textContent = "請輸入購買地點，或改選其他選項";
-      return;
-    }
+    document.querySelectorAll(".field.field-error").forEach(f => f.classList.remove("field-error"));
 
     // 儲存新輸入的地點並刷新下拉選單
     saveCustomLocation(location);
@@ -4538,7 +4723,8 @@
     setLocationValue(itemLocationSelect, itemLocationCustom, "");
     resetCategorySelection();
     renderBrandOptions();
-    formMsg.textContent = "";
+    flashAddBtn("✓ 已加入");
+    setFormStatus("saving", "儲存中…");
     $("itemGrams").focus();
 
     uploadQueue.push({ tempId, name, brand, product: productName, category, subCategory, grams, price, count, unitPrice, date, location });
@@ -4612,7 +4798,7 @@
     formTitle.textContent = "編輯品項";
     addBtn.textContent = "更新紀錄";
     cancelEditBtn.style.display = "block";
-    formMsg.textContent = "";
+    setFormStatus("", "");
     editHint.textContent = `✎ 正在編輯「${item.name}」，改完按「更新紀錄」即可，不用捲動頁面`;
     editHint.style.display = "block";
     // 編輯表單固定在畫面下方，點列表其他項目時不用再往上滑
@@ -4667,30 +4853,31 @@
     renderCategoryChips();
     renderTable();
     endEdit();
-    formMsg.textContent = "";
+    flashAddBtn("✓ 已更新");
+    setFormStatus("saving", "更新中…");
     setSyncState("syncing", "背景更新中…");
 
-    fetch(scriptUrl, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({ action: "update", row, ...fields, name: fields.product, brand: fields.brand })
-    }).then(async (res) => {
-      let ok = true;
-      try{
-        const data = JSON.parse(await res.text());
-        ok = data.status === "ok";
-        if(!ok && target) target.uploadError = true;
-      }catch(parseErr){ /* 忽略解析錯誤，畫面已是最新資料 */ }
-      if(target) target.updating = false;
-      setSyncState(ok ? "ok" : "error", ok
-        ? ("已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}))
-        : "更新可能失敗，請按 ↻ 重新整理確認");
+    const sendUpdate = () => {
+      if(target) target.updating = true;
       renderTable();
-    }).catch((err) => {
-      if(target) target.updating = false;
-      setSyncState("error", "更新失敗：" + err.message);
-      renderTable();
-    });
+      setFormStatus("saving", "更新中…");
+      setSyncState("syncing", "背景更新中…");
+      postWithTimeout({ action: "update", row, ...fields, name: fields.product, brand: fields.brand })
+        .then((data) => {
+          if(data.status !== "ok") throw new Error(data.message || "更新失敗");
+          if(target){ target.updating = false; target.uploadError = false; }
+          setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+          setFormStatus("ok", "✓ 已更新");
+          renderTable();
+        })
+        .catch((err) => {
+          if(target){ target.updating = false; target.uploadError = true; }
+          setSyncState("error", "更新失敗：" + err.message);
+          setFormStatus("error", "更新沒有存成功：" + err.message, sendUpdate);
+          renderTable();
+        });
+    };
+    sendUpdate();
   }
 
   // ---------- 刪除品項 ----------
@@ -4946,7 +5133,8 @@
     const badges = [];
     if(!pending && total > 1 && rank === 1) badges.push('<span class="p-badge best">🏆 最划算</span>');
     if(variants > 1) badges.push(`<span class="p-badge">${variants} 種規格</span>`);
-    if(pending) badges.push('<span class="p-badge">⏳ 上傳中</span>');
+    if(pending && item.uploadError) badges.push('<span class="p-badge err">⚠ 上傳失敗</span>');
+    else if(pending) badges.push('<span class="p-badge">⏳ 上傳中</span>');
     const rankText = (!pending && total > 1) ? `#${rank}/${total}` : "";
     return `
       <button type="button" class="p-card tier-${pending ? "gray" : band}${pending ? " pending" : ""}" data-row="${escapeHtml(String(item.row))}" ${pending ? "disabled" : 'title="點擊看詳細資訊"'}>
