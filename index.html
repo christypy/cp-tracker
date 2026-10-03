@@ -2112,13 +2112,6 @@
     cursor:pointer; white-space:normal;
   }
   #addBtn{white-space:normal;}
-  /* 主／子類別：放在表單最上面，標籤精簡成「名稱＋筆數」，加大點擊範圍，一點就選 */
-  #addModal #formCategoryLeaderboard .lb-rank, #addModal #formCategoryLeaderboard .lb-avg,
-  #addModal #categoryChildCheckboxes .lb-rank, #addModal #categoryChildCheckboxes .lb-avg{display:none;}
-  #addModal #formCategoryLeaderboard .leaderboard-chip,
-  #addModal #categoryChildCheckboxes .leaderboard-chip{min-height:44px; padding:8px 16px; font-size:15px;}
-  #addModal #formCategoryLeaderboard .lb-name, #addModal #categoryChildCheckboxes .lb-name{font-size:15px;}
-  #addModal #categoryChildCheckboxes .leaderboard-chip.sub{border-style:dashed;}
   #saveToast{
     display:none; position:fixed; left:12px; right:70px; bottom:calc(76px + env(safe-area-inset-bottom,0px));
     max-width:460px; z-index:520; background:var(--white); border:1px solid var(--line); border-radius:14px;
@@ -2127,50 +2120,67 @@
   }
   #saveToast.show{display:flex;}
 
-  /* ============ 新增視窗精簡版：少捲動、送出鈕固定在底部 ============ */
-  #addModal .app-modal-box{padding:10px 12px 0;}
-  #addModal .app-modal-header{margin-bottom:6px;}
-  #addModal .app-modal-header .card-title{font-size:16px;}
-  .app-modal-box.tall > .add-modal-body{padding:0 0 0;}
-  #addModal form#addForm{grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px 8px;}
-  #addModal form#addForm .w2{grid-column:span 2;}
-  #addModal form#addForm .w3{grid-column:span 3;}
-  #addModal form#addForm .w4{grid-column:span 4;}
-  #addModal .field{gap:4px;}
-  #addModal .field label{font-size:12px; margin:0;}
-  #addModal .field input{padding:8px 10px; font-size:16px;}
-  #addModal .cat-field-hint{display:none;}
-  #addModal .edit-hint{padding:6px 10px;}
-  #addModal .field:has(> #liveRankPreview:not(.show)){display:none;}
-  #addModal .live-rank-preview{margin-top:0; padding-top:6px;}
-  /* 克數／價格／數量同一排；算出的 CP 值與日期同一排 */
-  #addModal .calc-result{grid-column:span 3; margin:0; padding:0; border:0; justify-content:flex-start; align-self:end;}
-  #addModal .stamp{transform:none; font-size:17px; padding:4px 10px; border-width:2px; border-radius:8px; text-align:left;}
-  #addModal .stamp small{display:inline; margin-left:4px; font-size:10px;}
-  #addModal .stamp .unit-p{font-size:11px; margin-top:0;}
-  /* 類別／品牌／地點標籤：單排左右滑動，不再佔好幾行 */
-  #addModal .leaderboard-strip, #addModal #brandChips{
-    flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; gap:6px; padding-bottom:2px;
+  /* ============ 新增視窗（重新設計）：標題列／可捲動內容／固定底部按鈕 ============ */
+  #addModal .app-modal-box{
+    display:flex; flex-direction:column; padding:0; overflow:hidden; background:var(--paper);
+    width:100%; max-width:560px; height:min(100%, 780px); min-height:0; max-height:none; margin:auto;
   }
-  #addModal .leaderboard-strip::-webkit-scrollbar, #addModal #brandChips::-webkit-scrollbar{display:none;}
-  #addModal #brandChips{grid-column:1/-1; margin:0;}
-  #addModal .leaderboard-chip, #addModal #brandChips .chip{flex:none; white-space:nowrap; max-width:none;}
-  #addModal .leaderboard-chip .lb-name{white-space:nowrap;}
-  #addModal #formCategoryLeaderboard .leaderboard-chip,
-  #addModal #categoryChildCheckboxes .leaderboard-chip{min-height:38px; padding:6px 14px; font-size:14px;}
-  #addModal #formCategoryLeaderboard, #addModal #categoryChildCheckboxes{margin-bottom:4px;}
-  #addModal .cat-manual-btn{align-self:flex-start; min-height:32px; padding:4px 12px; font-size:12px;}
-  #addModal #categoryChildManualBtn{margin-top:2px;}
-  /* 送出按鈕列：固定在視窗底部，不用捲到最下面 */
-  .add-actions{
-    grid-column:1/-1; position:sticky; bottom:0; z-index:3; background:var(--white);
-    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px;
-    padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--line);
+  @media (max-width:560px){
+    #addModal{align-items:flex-end;}
+    #addModal .app-modal-box{height:94%; max-width:100%; margin:0; border-radius:20px 20px 0 0;}
   }
-  .add-actions #formMsg{grid-column:1/-1; min-height:0; margin:0; font-size:13px;}
-  .add-actions #addBtn, .add-actions #addKeepBtn{grid-column:auto; margin:0; min-height:46px; padding:8px; font-size:15px;}
-  .add-actions.editing #addBtn, .add-actions #cancelEditBtn{grid-column:1/-1;}
-  .add-actions #cancelEditBtn{margin:0; min-height:40px;}
+  #addModal .app-modal-header{
+    flex:none; margin:0; padding:12px 14px 10px; background:var(--white); border-bottom:1px solid var(--line);
+    position:static;
+  }
+  #addModal .app-modal-header .card-title{font-size:17px; margin:0;}
+  .add-modal-body{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; padding:12px 12px 16px;}
+  #addModal form#addForm{display:flex; flex-direction:column; gap:12px;}
+  .add-sec{
+    background:var(--white); border:1px solid var(--line); border-radius:16px;
+    padding:12px 14px 14px; display:flex; flex-direction:column; gap:10px; min-width:0;
+  }
+  .add-sec-title{margin:0; font-size:15px; font-weight:900; color:var(--ink); display:flex; align-items:baseline; gap:8px;}
+  .add-sec-title em{font-style:normal; font-size:11px; font-weight:700; color:var(--red);}
+  .add-sub{display:flex; flex-direction:column; gap:8px; padding-top:10px; border-top:1px dashed var(--line);}
+  .add-sub-title{font-size:12px; font-weight:700; color:var(--ink-soft);}
+  .add-row3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;}
+  .add-row-brand{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:8px;}
+  #addModal .field{gap:5px; min-width:0;}
+  #addModal .field label{font-size:12px; color:var(--ink-soft); margin:0;}
+  #addModal .field input{padding:10px; font-size:16px; background:var(--paper); width:100%; min-width:0;}
+  #addModal .calc-result{display:block; margin:0; padding:0; border:0;}
+  #addModal .stamp{
+    display:flex; align-items:baseline; gap:6px; transform:none; border:0; border-radius:10px;
+    background:var(--paper-2); padding:10px 12px; font-size:20px; white-space:normal; text-align:left;
+  }
+  #addModal .stamp small{display:inline; margin:0; font-size:11px; letter-spacing:0;}
+  #addModal .stamp .unit-p{margin:0 0 0 auto; font-size:13px;}
+  #addModal .edit-hint{margin:0;}
+  /* 標籤：自動換行、全部看得到，不再左右滑動被吃掉 */
+  #addModal .leaderboard-strip, #addModal #brandChips{display:flex; flex-wrap:wrap; overflow:visible; gap:7px; padding:0; margin:0;}
+  #addModal .leaderboard-chip, #addModal #brandChips .chip{
+    flex:0 0 auto; max-width:100%; min-height:36px; padding:6px 13px; font-size:14px;
+    white-space:nowrap; border-radius:999px;
+  }
+  #addModal .leaderboard-chip .lb-name{white-space:nowrap; font-size:14px;}
+  #addModal .lb-rank, #addModal .lb-avg{display:none;}
+  #addModal #categoryChildCheckboxes .leaderboard-chip.sub{border-style:dashed;}
+  #addModal #formCategoryLeaderboard, #addModal #categoryChildCheckboxes{margin:0;}
+  #addModal .cat-manual-btn{
+    align-self:flex-start; min-height:34px; padding:6px 14px; font-size:13px; font-family:inherit;
+    border:1px dashed var(--ink-soft); border-radius:999px; background:transparent; color:var(--ink-soft);
+  }
+  #addModal .cat-manual-row{margin:0;}
+  #addModal .live-rank-preview{margin:0; padding:8px 0 0; border-top:1px dashed var(--line);}
+  #addModal .add-actions{
+    flex:none; display:grid; grid-template-columns:1fr 1fr; gap:8px; background:var(--white);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--line);
+  }
+  #addModal .add-actions #formMsg{grid-column:1/-1; margin:0; min-height:0; font-size:13px;}
+  #addModal .add-actions button{grid-column:auto; margin:0; min-height:48px; padding:8px; font-size:16px; border-radius:12px; white-space:normal;}
+  #addModal .add-actions.editing #addBtn, #addModal .add-actions #cancelEditBtn{grid-column:1/-1;}
+  #addModal .add-actions #cancelEditBtn{min-height:42px; font-size:14px;}
 
 </style>
 </head>
@@ -2242,82 +2252,94 @@
 
 <!-- 新增／編輯品項彈跳視窗 -->
 <div id="addModal" class="app-modal-backdrop">
-  <div class="app-modal-box tall" id="addFormCard">
+  <div class="app-modal-box" id="addFormCard">
     <div class="app-modal-header">
       <p class="card-title" id="formTitle">新增品項</p>
       <button type="button" class="app-modal-close" id="closeAddModalBtn">關閉 ✕</button>
     </div>
     <div class="add-modal-body">
-<form id="addForm">
-      <div class="edit-hint" id="editHint" style="display:none;"></div>
-      <div class="field full">
-        <label>主類別 <span style="color:var(--red);">*必填</span><span class="cat-field-hint">點一下標籤即可選取</span></label>
-        <div id="formCategoryLeaderboard"></div>
-        <button type="button" class="cat-manual-btn" id="categoryParentManualBtn">新增主類別</button>
-        <div class="cat-manual-row" id="categoryParentManualRow" style="display:none;">
-          <input type="text" id="categoryParentManualInput" placeholder="輸入新主類別名稱" autocomplete="off">
-          <button type="button" id="categoryParentManualAddBtn">加入</button>
-        </div>
-      </div>
-      <div class="field full" id="childCategoryField" style="display:none;">
-        <label>子類別（選填，可複選）<span class="cat-field-hint">點一下選取，再點一次取消</span></label>
-        <div id="categoryChildCheckboxes"></div>
-        <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
-          <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
-          <button type="button" id="categoryChildManualAddBtn">加入</button>
-        </div>
-        <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">新增子類別</button>
-      </div>
-      <div class="field full">
-        <div class="live-rank-preview" id="liveRankPreview"></div>
-      </div>
-      <div class="field w2">
-        <label for="itemGrams">克數 (g)</label>
-        <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="例如 50" required>
-      </div>
-      <div class="field w2">
-        <label for="itemPrice">總價 ($)</label>
-        <input type="number" id="itemPrice" inputmode="decimal" placeholder="例如 380" required>
-      </div>
-      <div class="field w2">
-        <label for="itemCount">數量</label>
-        <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="例如 1" required>
-      </div>
+      <form id="addForm">
+        <div class="edit-hint" id="editHint" style="display:none;"></div>
 
-      <div class="calc-result">
-        <div class="stamp mono" id="calcStamp">
-          --<small>$ / g</small>
-          <div class="unit-p" id="unitPricePreview">單罐 --</div>
-        </div>
-      </div>
-      <div class="field w3">
-        <label for="itemDate">日期</label>
-        <input type="date" id="itemDate">
-      </div>
+        <section class="add-sec field">
+          <h3 class="add-sec-title">分類 <em>*主類別必選</em></h3>
+          <div id="formCategoryLeaderboard"></div>
+          <button type="button" class="cat-manual-btn" id="categoryParentManualBtn">＋ 新增主類別</button>
+          <div class="cat-manual-row" id="categoryParentManualRow" style="display:none;">
+            <input type="text" id="categoryParentManualInput" placeholder="輸入新主類別名稱" autocomplete="off">
+            <button type="button" id="categoryParentManualAddBtn">加入</button>
+          </div>
+          <div class="add-sub" id="childCategoryField" style="display:none;">
+            <div class="add-sub-title">子類別（選填，可複選）</div>
+            <div id="categoryChildCheckboxes"></div>
+            <div class="cat-manual-row" id="categoryChildManualRow" style="display:none;">
+              <input type="text" id="categoryChildManualInput" placeholder="輸入新子類別名稱" autocomplete="off">
+              <button type="button" id="categoryChildManualAddBtn">加入</button>
+            </div>
+            <button type="button" class="cat-manual-btn" id="categoryChildManualBtn">＋ 新增子類別</button>
+          </div>
+          <div class="live-rank-preview" id="liveRankPreview"></div>
+        </section>
 
-      <div class="field w2">
-        <label for="itemBrand">品牌（選填）</label>
-        <input type="text" id="itemBrand" list="brandList" placeholder="品牌" autocomplete="off" autocapitalize="off">
-        <datalist id="brandList"></datalist>
-      </div>
-      <div class="field w4">
-        <label for="itemName">品項名稱</label>
-        <input type="text" id="itemName" placeholder="品名（不用再打品牌）" required>
-      </div>
-      <div class="chips brand-row" id="brandChips"></div>
-      <div class="field full">
-        <label>購買地點<span class="cat-field-hint">點擊即可選取，越常用的地點排越前面</span></label>
-        <div class="leaderboard-strip" id="itemLocation"></div>
-        <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
-      </div>
+        <section class="add-sec">
+          <h3 class="add-sec-title">價格</h3>
+          <div class="add-row3">
+            <div class="field">
+              <label for="itemGrams">克數 (g)</label>
+              <input type="number" id="itemGrams" inputmode="decimal" step="any" placeholder="50" required>
+            </div>
+            <div class="field">
+              <label for="itemPrice">總價 ($)</label>
+              <input type="number" id="itemPrice" inputmode="decimal" placeholder="380" required>
+            </div>
+            <div class="field">
+              <label for="itemCount">數量</label>
+              <input type="number" id="itemCount" inputmode="numeric" value="1" min="1" placeholder="1" required>
+            </div>
+          </div>
+          <div class="calc-result">
+            <div class="stamp mono" id="calcStamp">
+              --<small>$ / g</small>
+              <div class="unit-p" id="unitPricePreview">單罐 --</div>
+            </div>
+          </div>
+        </section>
 
-      <div class="add-actions">
-        <div id="formMsg"></div>
-        <button type="submit" id="addBtn">加入紀錄</button>
-        <button type="submit" id="addKeepBtn">加入並繼續</button>
-        <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
-      </div>
-    </form>
+        <section class="add-sec">
+          <h3 class="add-sec-title">品項</h3>
+          <div class="add-row-brand">
+            <div class="field">
+              <label for="itemBrand">品牌（選填）</label>
+              <input type="text" id="itemBrand" list="brandList" placeholder="DHC" autocomplete="off" autocapitalize="off">
+              <datalist id="brandList"></datalist>
+            </div>
+            <div class="field">
+              <label for="itemName">品項名稱</label>
+              <input type="text" id="itemName" placeholder="品名（不用再打品牌）" required>
+            </div>
+          </div>
+          <div class="chips brand-row" id="brandChips"></div>
+        </section>
+
+        <section class="add-sec">
+          <h3 class="add-sec-title">購買資訊</h3>
+          <div class="field">
+            <label for="itemDate">日期</label>
+            <input type="date" id="itemDate">
+          </div>
+          <div class="field">
+            <label>購買地點</label>
+            <div class="leaderboard-strip" id="itemLocation"></div>
+            <input type="text" id="itemLocationCustom" placeholder="輸入購買地點" style="display:none; margin-top:6px;">
+          </div>
+        </section>
+      </form>
+    </div>
+    <div class="add-actions">
+      <div id="formMsg"></div>
+      <button type="submit" form="addForm" id="addBtn">加入紀錄</button>
+      <button type="submit" form="addForm" id="addKeepBtn">加入並繼續</button>
+      <button type="button" id="cancelEditBtn" style="display:none;">取消編輯</button>
     </div>
   </div>
 </div>
