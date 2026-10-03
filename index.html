@@ -4673,7 +4673,8 @@
   }
 
   function updateQueueStatus(){
-    const n = uploadQueue.length + (isProcessingQueue ? 1 : 0);
+    // 正在上傳的那一筆在上傳完成前仍留在 uploadQueue 的第一個位置，所以直接用佇列長度即可（原本多加 1 會重複計算）
+    const n = uploadQueue.length;
     if(n > 0){
       setSyncState("syncing", "背景上傳中…（剩餘 " + n + " 筆）");
       setFormStatus("saving", "儲存中…（剩餘 " + n + " 筆）");
