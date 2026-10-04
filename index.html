@@ -1455,6 +1455,35 @@
   .p-card.tier-red{border-left-color:var(--red);}
   .p-card.tier-gray{border-left-color:var(--line);}
   .p-card.pending{opacity:.6; cursor:default;}
+
+  /* ---- 最愛（星星）：星星是卡片旁的獨立按鈕（button 裡不能再放 button），疊在卡片右上角 ---- */
+  .p-wrap{position:relative; display:flex; min-width:0;}
+  .p-wrap > .p-card{flex:1; min-width:0;}
+  .p-wrap .p-name{padding-right:30px;}
+  .fav-star{
+    position:absolute; top:4px; right:4px;
+    width:36px; height:36px;
+    display:flex; align-items:center; justify-content:center;
+    padding:0; border:0; border-radius:50%;
+    background:transparent;
+    font-size:21px; line-height:1;
+    color:#C9B49A;
+    cursor:pointer;
+    transition:transform .12s ease, color .12s ease, background .12s ease;
+    touch-action:manipulation;
+  }
+  .fav-star:hover{color:#E3A008; background:rgba(240,180,41,.14);}
+  .fav-star:active{transform:scale(.88);}
+  .fav-star.on{color:#E3A008;}
+  .p-wrap.is-fav > .p-card{
+    background:rgba(240,180,41,.10);
+    border-color:rgba(227,160,8,.55);
+  }
+  #favFilterBtn{font-size:11px;}
+  #favFilterBtn.active{background:#E3A008; border-color:#E3A008; color:#fff;}
+  .detail-actions button.fav-on{
+    color:#B7791F; border-color:#E3A008; background:rgba(240,180,41,.14);
+  }
   .p-name{
     font-size:14.5px;
     font-weight:700;
@@ -1827,7 +1856,7 @@
     }
 
     /* ---- 膠囊標籤：取消 nowrap，改成圓角矩形，換行後比較好看 ---- */
-    .chip, .chip.sub, #sortToggleBtn,
+    .chip, .chip.sub, #sortToggleBtn, #favFilterBtn,
     .leaderboard-chip, .cat-manual-btn, .pager-btn{
       white-space:normal;
       max-width:100%;
@@ -2231,6 +2260,7 @@
           <button class="chip active" data-cat="__all__">全部</button>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
+          <button id="favFilterBtn" class="chip" title="只顯示加了星星的產品">☆ 最愛</button>
           <button id="sortToggleBtn" class="chip" title="切換每個類別內的排列方向">🔽 最划算優先</button>
           <input type="text" id="searchInput" placeholder="搜尋品項／類別／子類別…">
         </div>
@@ -2523,6 +2553,17 @@
   let items = [];
   // 比價紀錄：不管划不划算，只要按過「記錄這次比價」都會存在這裡（同步在 Google 試算表的「比價紀錄」分頁）
   let comparisonLog = [];
+
+  // 最愛（星星）：標記「這個產品優先挑選」。以完整品項名稱（不分大小寫）為單位，
+  // 跟列表「同品項合併」的邏輯一致：同一品項的不同規格／通路共用一顆星。
+  // 同步存在試算表的「最愛」分頁；localStorage 只當離線快取。
+  const LS_FAV_KEY = "cp_tracker_favorites_v1";
+  let favorites = new Set();
+  try{
+    const storedFav = JSON.parse(localStorage.getItem(LS_FAV_KEY) || "[]");
+    if(Array.isArray(storedFav)) favorites = new Set(storedFav);
+  }catch(e){ favorites = new Set(); }
+  let favOnly = false;
   const LS_COMPLOG_CACHE_KEY = "cpValueComparisonLogCache_v1";
   let activeCategory = "__all__";
   let searchTerm = "";
@@ -4509,6 +4550,10 @@
         manageableCategories = normalizedManual;
         persistCategoriesLocalOnly();
       }
+      if(Array.isArray(data.favorites)){
+        favorites = new Set(data.favorites.map(favKey).filter(Boolean));
+        saveFavLocal();
+      }
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
@@ -5000,6 +5045,7 @@
   function submitUpdate(rowRaw, fields){
     const row = Number(rowRaw);
     const target = items.find(i => i.row === row);
+    const oldNameForFav = target ? target.name : "";
     if(target){
       target.name = fields.name;
       target.brand = fields.brand;
@@ -5015,6 +5061,7 @@
       target.location = fields.location;
       target.updating = true;
       target.updatedAt = Date.now(); // 編輯後視為「最近更新」，讓它在預設列表排序時排到前面
+      migrateFavoriteOnRename(oldNameForFav, target.name);
     }
     renderLocationOptions();
     renderCategoryChips();
@@ -5150,6 +5197,13 @@
 
   $("searchInput").addEventListener("input", (e) => {
     searchTerm = e.target.value.trim().toLowerCase();
+    currentPage = 0;
+    renderTable();
+  });
+
+  const favFilterBtn = $("favFilterBtn");
+  favFilterBtn.addEventListener("click", () => {
+    favOnly = !favOnly;
     currentPage = 0;
     renderTable();
   });
@@ -5293,6 +5347,57 @@
     return "red";
   }
 
+  // ---------- 最愛（星星）----------
+  function favKey(name){ return String(name || "").trim().toLowerCase(); }
+  function isFavorite(name){ return favorites.has(favKey(name)); }
+  function saveFavLocal(){ localStorage.setItem(LS_FAV_KEY, JSON.stringify(Array.from(favorites))); }
+
+  // 依序送出（避免連點兩下時兩個請求順序顛倒）
+  let favChain = Promise.resolve();
+  function syncFavorite(name, fav){
+    if(!scriptUrl) return;
+    setSyncState("syncing", "同步最愛中…");
+    favChain = favChain.then(async () => {
+      try{
+        const res = await fetch(scriptUrl, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},
+          body: JSON.stringify({ action: "setFavorite", name, favorite: fav })
+        });
+        const text = await res.text();
+        let data;
+        try{ data = JSON.parse(text); }catch(parseErr){ throw new Error("回傳格式錯誤"); }
+        if(data.status !== "ok") throw new Error(data.message || "最愛同步失敗");
+        setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+      }catch(err){
+        setSyncState("error", "星星已存在本機，但同步到試算表失敗（請確認 Code.gs 已更新並重新部署）：" + err.message);
+      }
+    });
+  }
+
+  function toggleFavorite(name){
+    const key = favKey(name);
+    if(!key) return;
+    const nowFav = !favorites.has(key);
+    if(nowFav) favorites.add(key); else favorites.delete(key);
+    saveFavLocal();
+    renderTable();
+    if($("detailModal").classList.contains("show") && detailRow !== null) renderDetail();
+    syncFavorite(name, nowFav);
+  }
+
+  // 編輯時如果改了品名／品牌，星星要跟著搬過去（舊名稱已經沒有任何紀錄時才搬）
+  function migrateFavoriteOnRename(oldName, newName){
+    const oldKey = favKey(oldName), newKey = favKey(newName);
+    if(!oldKey || oldKey === newKey || !favorites.has(oldKey)) return;
+    if(items.some(i => !i.pending && favKey(i.name) === oldKey)) return;
+    favorites.delete(oldKey);
+    favorites.add(newKey);
+    saveFavLocal();
+    syncFavorite(oldName, false);
+    syncFavorite(newName, true);
+  }
+
   function renderProductCard(group, band, rank, total){
     const item = group.rep;
     const pending = !!item.pending;
@@ -5303,7 +5408,10 @@
     if(pending && item.uploadError) badges.push('<span class="p-badge err">⚠ 上傳失敗</span>');
     else if(pending) badges.push('<span class="p-badge">⏳ 上傳中</span>');
     const rankText = (!pending && total > 1) ? `#${rank}/${total}` : "";
+    const fav = !pending && isFavorite(item.name);
+    const starHtml = pending ? "" : `<button type="button" class="fav-star${fav ? " on" : ""}" data-name="${escapeHtml(item.name)}" aria-pressed="${fav}" aria-label="${fav ? "取消最愛" : "加入最愛"}" title="${fav ? "取消優先挑選" : "標成優先挑選"}">${fav ? "★" : "☆"}</button>`;
     return `
+      <div class="p-wrap${fav ? " is-fav" : ""}">
       <button type="button" class="p-card tier-${pending ? "gray" : band}${pending ? " pending" : ""}" data-row="${escapeHtml(String(item.row))}" ${pending ? "disabled" : 'title="點擊看詳細資訊"'}>
         <span class="p-name">${escapeHtml(item.name)}</span>
         <span class="p-badges">${badges.join("")}</span>
@@ -5312,7 +5420,9 @@
           <span class="p-cp mono">${item.cp.toFixed(3)}<small>$/g</small></span>
           <span class="p-rank mono">${rankText}</span>
         </span>
-      </button>`;
+      </button>
+      ${starHtml}
+      </div>`;
   }
 
   function renderSection(sec){
@@ -5379,9 +5489,17 @@
       sortToggleBtn.textContent = sortAsc ? "🔽 最划算優先" : "🔼 最貴優先";
     }
 
-    const list = items.filter(i => categoryMatches(i, activeCategory) && itemMatchesSearch(i, searchTerm));
+    if(favFilterBtn){
+      const favCount = new Set(items.filter(i => !i.pending && isFavorite(i.name)).map(i => favKey(i.name))).size;
+      favFilterBtn.textContent = (favOnly ? "★ 最愛" : "☆ 最愛") + (favCount ? ` (${favCount})` : "");
+      favFilterBtn.classList.toggle("active", favOnly);
+    }
+
+    const list = items.filter(i => categoryMatches(i, activeCategory) && itemMatchesSearch(i, searchTerm) && (!favOnly || isFavorite(i.name)));
     if(list.length === 0){
-      tableBody.innerHTML = '<div class="empty-state">還沒有符合條件的紀錄</div>';
+      tableBody.innerHTML = favOnly
+        ? '<div class="empty-state">還沒有符合條件的最愛產品<br>點產品卡片右上角的 ☆ 就能標成優先挑選</div>'
+        : '<div class="empty-state">還沒有符合條件的紀錄</div>';
       return;
     }
 
@@ -5418,6 +5536,9 @@
         else collapsedSections.add(id);
         renderTable();
       });
+    });
+    tableBody.querySelectorAll(".fav-star").forEach(btn => {
+      btn.addEventListener("click", (e) => { e.stopPropagation(); toggleFavorite(btn.dataset.name); });
     });
     tableBody.querySelectorAll(".p-card:not(.pending)").forEach(btn => {
       btn.addEventListener("click", () => openDetailModal(btn.dataset.row));
@@ -5486,6 +5607,9 @@
       </div>
       ${variantsHtml}
       <div class="detail-actions">
+        <button type="button" id="detailFavBtn" class="${isFavorite(item.name) ? "fav-on" : ""}">${isFavorite(item.name) ? "★ 已加入最愛" : "☆ 加入最愛"}</button>
+      </div>
+      <div class="detail-actions">
         <button type="button" class="primary" id="detailCompareBtn">🔍 比價</button>
         <button type="button" id="detailEditBtn">✎ 編輯</button>
         <button type="button" class="danger" id="detailDeleteBtn">✕ 刪除</button>
@@ -5497,6 +5621,8 @@
         renderDetail();
       });
     });
+    const favBtn = $("detailFavBtn");
+    if(favBtn) favBtn.addEventListener("click", () => toggleFavorite(item.name));
     const compareBtn = $("detailCompareBtn");
     const editBtn = $("detailEditBtn");
     const delBtn = $("detailDeleteBtn");

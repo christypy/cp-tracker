@@ -41,6 +41,11 @@
  * ℹ 這個版本也把「手動先建立、還沒有任何紀錄的空類別」改成會同步存進一個叫「手動類別」的
  *    新分頁（一樣第一次用到時自動建立，不用手動新增）。這樣在網頁上手動新增的主／子類別
  *    就會跟其他裝置、其他瀏覽器保持一致，不會有「網頁上看得到、試算表裡找不到」的落差。
+ *
+ * ℹ 這個版本加了「最愛（星星）」功能：在網頁產品卡片按右上角的星星，就會把這個產品標成
+ *    「優先挑選」，資料存進一個叫「最愛」的新分頁（第一次用到時自動建立，不用手動新增），
+ *    不同裝置會一致。更新這份程式後，記得「部署」→「管理部署作業」→ 編輯 → 版本選「新版本」→ 部署，
+ *    網址不會變，新功能才會生效。
  */
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
@@ -62,6 +67,61 @@ const CATEGORY_ORDER_SHEET_NAME = '類別排序';
 // 會在第一次用到時自動建立。這樣手動先建立的空類別也會寫進試算表，不同裝置、清瀏覽器資料
 // 都不會跑掉，也不會有「網頁上有、試算表沒有」的落差。
 const MANUAL_CATEGORY_SHEET_NAME = '手動類別';
+
+// 存放「最愛（星星）」的分頁：標記「這個產品優先挑選」。第一次用到時自動建立，不用手動新增。
+// 以「完整品項名稱（品牌＋品名）」為單位，同一品項不同規格／通路共用同一顆星。
+// 欄位：品項名稱 | 加入時間
+const FAVORITE_SHEET_NAME = '最愛';
+
+function getFavoriteSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(FAVORITE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(FAVORITE_SHEET_NAME);
+    sheet.appendRow(['品項名稱', '加入時間']);
+  }
+  return sheet;
+}
+
+// 讀出所有最愛的品項名稱（陣列）
+function readFavorites_() {
+  const sheet = getFavoriteSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const names = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  const result = [];
+  names.forEach(r => {
+    const n = String(r[0] || '').trim();
+    if (n && result.indexOf(n) === -1) result.push(n);
+  });
+  return result;
+}
+
+// 加入／取消最愛。重複加入不會產生重複列；比對名稱不分大小寫
+function setFavorite_(name, favorite) {
+  const n = String(name || '').trim();
+  if (!n) throw new Error('缺少品項名稱，無法設定最愛');
+  const key = n.toLowerCase();
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getFavoriteSheet_();
+    const lastRow = sheet.getLastRow();
+    const names = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, 1).getValues() : [];
+    // 由下往上刪，列號才不會跑掉
+    let found = false;
+    for (let i = names.length - 1; i >= 0; i--) {
+      if (String(names[i][0] || '').trim().toLowerCase() === key) {
+        if (favorite && !found) { found = true; continue; }
+        sheet.deleteRow(i + 2);
+      }
+    }
+    if (favorite && !found) sheet.appendRow([n, new Date()]);
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 // 取得（或自動建立）存放手動類別的分頁
 // 欄位：主類別 | 子類別（子類別留空代表「這個主類別本身還沒有任何子類別」的存在紀錄）
@@ -553,7 +613,8 @@ function doGet(e) {
     const categoryOrder = readCategoryOrder_();
     const comparisonLog = readComparisonLog_();
     const manualCategories = readManualCategories_();
-    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories });
+    const favorites = readFavorites_();
+    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories, favorites });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
@@ -605,6 +666,12 @@ function doPost(e) {
     // 儲存手動建立的主／子類別清單（跟品項資料是不同分頁，這裡直接處理、不用碰到品項工作表）
     if (body.action === 'saveManualCategories') {
       writeManualCategories_(body.categories || {});
+      return jsonOut_({ status: 'ok' });
+    }
+
+    // 加入／取消最愛（星星）：跟品項資料是不同分頁，這裡直接處理
+    if (body.action === 'setFavorite') {
+      setFavorite_(body.name, !!body.favorite);
       return jsonOut_({ status: 'ok' });
     }
 
