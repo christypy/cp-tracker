@@ -2215,6 +2215,73 @@
   #backToTopBtn{bottom:calc(76px + env(safe-area-inset-bottom,0px));}
   #scrollToBottomBtn{bottom:calc(126px + env(safe-area-inset-bottom,0px));}
 
+
+  /* ---------- 標籤 ---------- */
+  #tagChips{margin-top:8px; align-items:center;}
+  #tagChips:empty{margin-top:0;}
+  .tag-chips-label{font-family:'Space Mono', monospace; font-size:11px; color:var(--ink-soft);}
+  .chip.tag{
+    font-size:11px; padding:6px 11px;
+    border-color:#8FB1AC; color:#3F6B66; background:rgba(127,164,160,.12);
+  }
+  .chip.tag.active{background:#3F6B66; border-color:#3F6B66; color:var(--white);}
+  .chip.tag.tag-clear{border-style:dashed; background:transparent; color:var(--ink-soft); border-color:var(--line);}
+  .p-badge.tag{background:rgba(127,164,160,.20); color:#3F6B66;}
+  .tag-empty{font-size:12px; color:var(--ink-soft); padding:6px 2px;}
+
+  /* 產品詳細資訊裡的標籤區 */
+  .detail-tags{margin:2px 0 8px;}
+  .detail-tag-add{display:flex; gap:8px; margin-bottom:14px;}
+  .detail-tag-add input{
+    flex:1; min-width:0;
+    font-family:'Noto Sans TC', sans-serif; font-size:13px;
+    padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--paper);
+  }
+  .detail-tag-add button{
+    font-family:'Space Mono', monospace; font-size:12px;
+    padding:8px 14px; border-radius:8px; border:1px solid #3F6B66;
+    background:#3F6B66; color:var(--white); cursor:pointer; flex:none;
+  }
+
+  /* 管理標籤彈窗 */
+  #tagManagerList:empty::after{content:"還沒有任何標籤，請在上方新增"; font-size:12px; color:var(--ink-soft);}
+  #tagModal .location-manager-row{flex-wrap:wrap;}
+  #tagModal .location-manager-row .loc-name{min-width:40%;}
+
+  /* 勾選產品彈窗 */
+  .tag-picker-sticky{
+    position:sticky; top:0; z-index:2;
+    background:var(--white); padding-bottom:8px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .settings-body .tag-picker-tools{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  .settings-body .tag-picker-tools button{
+    background:var(--paper); color:var(--ink); border:1px solid var(--line);
+    padding:7px 11px; min-height:34px; touch-action:manipulation;
+  }
+  #tagPickerCount{margin-left:auto; font-family:'Space Mono', monospace; font-size:11px; color:var(--ink-soft);}
+  .tag-picker-list{display:flex; flex-direction:column; gap:4px;}
+  .tp-cat{
+    font-size:11px; letter-spacing:.08em; color:var(--ink-soft);
+    margin-top:8px; padding-bottom:2px; border-bottom:1px dashed var(--line);
+  }
+  .tp-row{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--paper); cursor:pointer; touch-action:manipulation;
+  }
+  .tp-row.on{background:rgba(127,164,160,.18); border-color:#3F6B66;}
+  .settings-body .tp-row input[type="checkbox"]{width:18px; height:18px; padding:0; flex:none; accent-color:#3F6B66;}
+  .tp-name{flex:1; min-width:0; font-size:13.5px; line-height:1.4; word-break:break-word;}
+  .tp-others{font-size:10.5px; color:#3F6B66; flex-basis:100%; padding-left:28px;}
+  .tag-picker-actions{
+    position:sticky; bottom:-2px; z-index:2;
+    background:var(--white); padding:10px 0 2px; margin-top:8px;
+  }
+  .settings-body .tag-picker-actions button{
+    width:100%; align-self:stretch; padding:12px; font-size:14px; font-weight:700;
+    background:#3F6B66; border-color:#3F6B66; color:var(--white);
+  }
 </style>
 </head>
 <body>
@@ -2242,6 +2309,7 @@
 <div id="quickManageLinks">
   <button type="button" id="jumpToCategoryManager">🏷 管理主類別／子類別</button>
   <button type="button" id="jumpToLocationManager">📍 管理購買地點</button>
+  <button type="button" id="jumpToTagManager">🔖 管理標籤</button>
   <button type="button" id="jumpToSettings">⚙ 設定同步網址</button>
 </div>
 
@@ -2266,6 +2334,7 @@
         </div>
       </div>
       <div class="chips" id="childCategoryChips"></div>
+      <div class="chips" id="tagChips"></div>
     </section>
 
     <div id="categoryStatsBar"></div>
@@ -2438,6 +2507,49 @@
   </div>
 </div>
 
+<!-- 管理標籤彈跳視窗 -->
+<div id="tagModal" class="app-modal-backdrop">
+  <div class="app-modal-box tall">
+    <div class="app-modal-header">
+      <p class="card-title">🔖 管理標籤</p>
+      <button type="button" class="app-modal-close" id="closeTagModalBtn">關閉 ✕</button>
+    </div>
+    <div class="settings-body">
+      <p>標籤跟類別是分開的：一個產品可以同時有多個標籤（例如精華液：「美白度高」＋「刺激度低」），一個標籤也可以一次放很多產品。建立標籤後會直接讓你勾選產品；也可以在產品的詳細資訊裡直接點選標籤。刪除標籤不會刪除產品。</p>
+      <div class="cat-manual-row">
+        <input type="text" id="newTagInput" placeholder="輸入新標籤名稱，例如：美白度高" maxlength="20" autocomplete="off">
+        <button type="button" id="newTagAddBtn">加入</button>
+      </div>
+      <div id="tagManagerList" class="location-manager-list"></div>
+      <div id="tagManagerMsg" class="location-manager-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 一次勾選多個產品放進標籤 -->
+<div id="tagPickerModal" class="app-modal-backdrop">
+  <div class="app-modal-box tall">
+    <div class="app-modal-header">
+      <p class="card-title" id="tagPickerTitle">選擇產品</p>
+      <button type="button" class="app-modal-close" id="closeTagPickerBtn">取消 ✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="tag-picker-sticky">
+        <input type="text" id="tagPickerSearch" placeholder="🔍 搜尋產品／類別／子類別…" autocomplete="off">
+        <div class="tag-picker-tools">
+          <button type="button" id="tagPickerSelectAll">全選目前顯示</button>
+          <button type="button" id="tagPickerClearAll">取消目前顯示</button>
+          <span id="tagPickerCount"></span>
+        </div>
+      </div>
+      <div id="tagPickerList" class="tag-picker-list"></div>
+      <div class="tag-picker-actions">
+        <button type="button" id="tagPickerSaveBtn">✓ 完成</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 產品詳細資訊彈窗（點列表小卡打開）-->
 <div id="detailModal" class="app-modal-backdrop">
   <div class="app-modal-box narrow">
@@ -2564,6 +2676,15 @@
     if(Array.isArray(storedFav)) favorites = new Set(storedFav);
   }catch(e){ favorites = new Set(); }
   let favOnly = false;
+  // 標籤：{ 標籤名稱: [完整品項名稱, ...] }。標籤跟類別是兩套獨立分類，一個產品可以有多個標籤。
+  // 同步存在試算表的「標籤」分頁；localStorage 只當離線快取。
+  const LS_TAGS_KEY = "cp_tracker_tags_v1";
+  let tagMap = {};
+  try{
+    const storedTags = JSON.parse(localStorage.getItem(LS_TAGS_KEY) || "{}");
+    if(storedTags && typeof storedTags === "object" && !Array.isArray(storedTags)) tagMap = storedTags;
+  }catch(e){ tagMap = {}; }
+  let activeTags = new Set(); // 目前列表篩選選取的標籤（可複選，需同時符合）
   const LS_COMPLOG_CACHE_KEY = "cpValueComparisonLogCache_v1";
   let activeCategory = "__all__";
   let searchTerm = "";
@@ -4554,6 +4675,10 @@
         favorites = new Set(data.favorites.map(favKey).filter(Boolean));
         saveFavLocal();
       }
+      if(data.tags && typeof data.tags === "object"){
+        tagMap = normalizeTagMap(data.tags);
+        saveTagsLocal();
+      }
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
@@ -5062,6 +5187,7 @@
       target.updating = true;
       target.updatedAt = Date.now(); // 編輯後視為「最近更新」，讓它在預設列表排序時排到前面
       migrateFavoriteOnRename(oldNameForFav, target.name);
+      migrateTagsOnRename(oldNameForFav, target.name);
     }
     renderLocationOptions();
     renderCategoryChips();
@@ -5307,7 +5433,8 @@
     if(!term) return true;
     if(item.name && item.name.toLowerCase().includes(term)) return true;
     if(item.category && item.category.toLowerCase().includes(term)) return true;
-    return subCategoriesOf(item).some(c => c.toLowerCase().includes(term));
+    if(subCategoriesOf(item).some(c => c.toLowerCase().includes(term))) return true;
+    return tagsOfName(item.name).some(t => t.toLowerCase().includes(term));
   }
 
   // ---------- 產品列表渲染（v2）----------
@@ -5398,6 +5525,331 @@
     syncFavorite(newName, true);
   }
 
+  // ---------- 標籤 ----------
+  // 標籤跟「類別」是兩套獨立的分類：一個產品可以同時有多個標籤（例如精華液：美白度高＋刺激度低），
+  // 一個標籤也可以一次放很多產品。跟最愛（星星）一樣，以「完整品項名稱（不分大小寫）」為單位，
+  // 同品項的不同規格／通路共用同一組標籤。同步存在試算表的「標籤」分頁；localStorage 只當離線快取。
+  function normalizeTagMap(raw){
+    const out = {};
+    if(!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    Object.keys(raw).forEach(t => {
+      const tag = String(t || "").trim();
+      if(!tag) return;
+      const seen = new Set();
+      const arr = [];
+      (Array.isArray(raw[t]) ? raw[t] : []).forEach(n => {
+        const name = String(n || "").trim();
+        const k = favKey(name);
+        if(!k || seen.has(k)) return;
+        seen.add(k);
+        arr.push(name);
+      });
+      out[tag] = arr;
+    });
+    return out;
+  }
+  function saveTagsLocal(){ localStorage.setItem(LS_TAGS_KEY, JSON.stringify(tagMap)); }
+
+  // 依序送出整份標籤清單（body 在真正送出的當下才組，所以連續快速操作時，最後一次一定是最新狀態）
+  let tagChain = Promise.resolve();
+  function syncTags(){
+    saveTagsLocal();
+    if(!scriptUrl) return;
+    setSyncState("syncing", "同步標籤中…");
+    tagChain = tagChain.then(async () => {
+      try{
+        const res = await fetch(scriptUrl, {
+          method: "POST",
+          headers: {"Content-Type": "text/plain;charset=utf-8"},
+          body: JSON.stringify({ action: "saveTags", tags: tagMap })
+        });
+        const text = await res.text();
+        let data;
+        try{ data = JSON.parse(text); }catch(parseErr){ throw new Error("回傳格式錯誤"); }
+        if(data.status !== "ok") throw new Error(data.message || "標籤同步失敗");
+        setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+      }catch(err){
+        setSyncState("error", "標籤已存在本機，但同步到試算表失敗（請確認 Code.gs 已更新並重新部署）：" + err.message);
+      }
+    });
+  }
+
+  function tagHas(tag, name){
+    const k = favKey(name);
+    return !!k && (tagMap[tag] || []).some(n => favKey(n) === k);
+  }
+  function tagsOfName(name){
+    const k = favKey(name);
+    if(!k) return [];
+    return Object.keys(tagMap).filter(t => tagMap[t].some(n => favKey(n) === k));
+  }
+  function findTagCaseInsensitive(name){
+    const k = String(name || "").trim().toLowerCase();
+    return Object.keys(tagMap).find(t => t.toLowerCase() === k) || null;
+  }
+  // 這個標籤目前「實際還存在」的產品數（已刪除的產品名稱不算）
+  function tagProductCount(tag){
+    const keys = new Set((tagMap[tag] || []).map(favKey));
+    const alive = new Set();
+    items.forEach(i => { if(!i.pending){ const k = favKey(i.name); if(keys.has(k)) alive.add(k); } });
+    return alive.size;
+  }
+  function toggleItemTag(tag, name){
+    if(!tagMap[tag]) return;
+    const k = favKey(name);
+    if(!k) return;
+    if(tagHas(tag, name)) tagMap[tag] = tagMap[tag].filter(n => favKey(n) !== k);
+    else tagMap[tag].push(name);
+    syncTags();
+  }
+  function matchesActiveTags(item){
+    if(activeTags.size === 0) return true;
+    return Array.from(activeTags).every(t => tagHas(t, item.name));
+  }
+
+  // 編輯時如果改了品名／品牌，標籤也要跟著搬過去（舊名稱已經沒有任何紀錄時才搬）
+  function migrateTagsOnRename(oldName, newName){
+    const oldKey = favKey(oldName), newKey = favKey(newName);
+    if(!oldKey || oldKey === newKey) return;
+    if(items.some(i => !i.pending && favKey(i.name) === oldKey)) return;
+    let changed = false;
+    Object.keys(tagMap).forEach(t => {
+      const arr = tagMap[t];
+      const idx = arr.findIndex(n => favKey(n) === oldKey);
+      if(idx === -1) return;
+      changed = true;
+      arr.splice(idx, 1);
+      if(!arr.some(n => favKey(n) === newKey)) arr.push(newName);
+    });
+    if(changed) syncTags();
+  }
+
+  // 列表上方的標籤篩選列：可複選，多選時「同時符合所有選取的標籤」才會顯示
+  function renderTagChips(){
+    const box = $("tagChips");
+    if(!box) return;
+    const tags = Object.keys(tagMap);
+    Array.from(activeTags).forEach(t => { if(!tagMap[t]) activeTags.delete(t); });
+    if(!tags.length){ box.innerHTML = ""; return; }
+    box.innerHTML =
+      '<span class="tag-chips-label">🔖 標籤' + (activeTags.size > 1 ? "（同時符合）" : "") + '</span>' +
+      tags.map(t => `<button type="button" class="chip tag${activeTags.has(t) ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} (${tagProductCount(t)})</button>`).join("") +
+      (activeTags.size ? '<button type="button" class="chip tag tag-clear" data-clear="1">✕ 清除</button>' : "");
+    box.querySelectorAll(".chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if(btn.dataset.clear) activeTags.clear();
+        else if(activeTags.has(btn.dataset.tag)) activeTags.delete(btn.dataset.tag);
+        else activeTags.add(btn.dataset.tag);
+        currentPage = 0;
+        renderTable();
+      });
+    });
+  }
+
+  // ----- 管理標籤彈窗 -----
+  const tagManagerList = $("tagManagerList");
+  const tagManagerMsg = $("tagManagerMsg");
+  const newTagInput = $("newTagInput");
+
+  function renderTagManager(){
+    const tags = Object.keys(tagMap);
+    tagManagerList.innerHTML = tags.map(t => `
+      <div class="location-manager-row" data-tag="${escapeHtml(t)}">
+        <span class="loc-name">🔖 ${escapeHtml(t)}</span>
+        <span class="loc-count">${tagProductCount(t)} 項</span>
+        <div class="loc-actions">
+          <button type="button" data-act="pick">選產品</button>
+          <button type="button" data-act="rename">改名</button>
+          <button type="button" class="danger" data-act="delete">刪除</button>
+        </div>
+      </div>`).join("");
+  }
+
+  tagManagerList.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if(!btn) return;
+    const row = btn.closest(".location-manager-row");
+    const tag = row && row.dataset.tag;
+    if(!tag || !tagMap[tag]) return;
+
+    if(btn.dataset.act === "pick"){
+      openTagPicker(tag);
+    } else if(btn.dataset.act === "rename"){
+      const input = prompt("新的標籤名稱", tag);
+      if(input === null) return;
+      const newName = input.trim();
+      if(!newName || newName === tag) return;
+      const dup = findTagCaseInsensitive(newName);
+      const rebuilt = {};
+      if(dup && dup !== tag){
+        if(!confirm(`已經有「${dup}」這個標籤，要把「${tag}」合併進去嗎？`)) return;
+        Object.keys(tagMap).forEach(t => {
+          if(t === tag) return;
+          rebuilt[t] = tagMap[t].slice();
+        });
+        tagMap[tag].forEach(n => { if(!rebuilt[dup].some(x => favKey(x) === favKey(n))) rebuilt[dup].push(n); });
+        tagManagerMsg.textContent = `已把「${tag}」合併進「${dup}」`;
+        if(activeTags.delete(tag)) activeTags.add(dup);
+      } else {
+        Object.keys(tagMap).forEach(t => { rebuilt[t === tag ? newName : t] = tagMap[t].slice(); });
+        tagManagerMsg.textContent = `已把「${tag}」改名為「${newName}」`;
+        if(activeTags.delete(tag)) activeTags.add(newName);
+      }
+      tagMap = rebuilt;
+      syncTags();
+      renderTagManager();
+      renderTable();
+    } else if(btn.dataset.act === "delete"){
+      if(!confirm(`確定要刪除標籤「${tag}」嗎？\n（只會移除標籤，裡面的產品本身不會被刪除）`)) return;
+      delete tagMap[tag];
+      activeTags.delete(tag);
+      syncTags();
+      tagManagerMsg.textContent = `已刪除標籤「${tag}」`;
+      renderTagManager();
+      renderTable();
+    }
+  });
+
+  function addTagFromInput(){
+    const name = newTagInput.value.trim();
+    if(!name){ tagManagerMsg.textContent = "請先輸入標籤名稱"; return; }
+    const dup = findTagCaseInsensitive(name);
+    if(dup){
+      tagManagerMsg.textContent = `已經有「${dup}」這個標籤了`;
+      return;
+    }
+    tagMap[name] = [];
+    newTagInput.value = "";
+    syncTags();
+    renderTagManager();
+    renderTable();
+    tagManagerMsg.textContent = `已建立「${name}」，接著勾選要放進去的產品吧`;
+    openTagPicker(name); // 建立完直接進入「一次勾選多個產品」
+  }
+  $("newTagAddBtn").addEventListener("click", addTagFromInput);
+  newTagInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); addTagFromInput(); }
+  });
+
+  // ----- 一次勾選多個產品放進某個標籤 -----
+  let tagPickerTag = "";
+  let tagPickerSel = new Set();
+  let tagPickerProducts = [];
+
+  function collectTagProducts(){
+    const seen = new Map();
+    items.forEach(i => {
+      if(i.pending) return;
+      const k = favKey(i.name);
+      if(!k || seen.has(k)) return;
+      seen.set(k, { key: k, name: i.name, category: i.category || "未分類", rep: i });
+    });
+    return Array.from(seen.values());
+  }
+
+  function tagPickerVisible(){
+    const term = $("tagPickerSearch").value.trim().toLowerCase();
+    if(!term) return tagPickerProducts;
+    return tagPickerProducts.filter(p =>
+      p.name.toLowerCase().includes(term) ||
+      p.category.toLowerCase().includes(term) ||
+      subCategoriesOf(p.rep).some(c => c.toLowerCase().includes(term)) ||
+      tagsOfName(p.name).some(t => t.toLowerCase().includes(term))
+    );
+  }
+
+  function updateTagPickerCount(){
+    const n = tagPickerProducts.filter(p => tagPickerSel.has(p.key)).length;
+    $("tagPickerCount").textContent = `已選 ${n} / ${tagPickerProducts.length} 項`;
+  }
+
+  function renderTagPickerList(){
+    const list = $("tagPickerList");
+    const vis = tagPickerVisible();
+    const byCat = new Map();
+    vis.forEach(p => {
+      if(!byCat.has(p.category)) byCat.set(p.category, []);
+      byCat.get(p.category).push(p);
+    });
+    const cats = Array.from(byCat.keys());
+    try{
+      const parents = orderedMainCategories(buildCategoryTree());
+      cats.sort((a, b) => {
+        const ia = parents.indexOf(a), ib = parents.indexOf(b);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      });
+    }catch(e){ /* 排序失敗就維持原順序 */ }
+
+    list.innerHTML = cats.length ? cats.map(c => {
+      const rows = byCat.get(c).slice().sort((a, b) => a.name.localeCompare(b.name, "zh-Hant")).map(p => {
+        const on = tagPickerSel.has(p.key);
+        const others = tagsOfName(p.name).filter(t => t !== tagPickerTag);
+        return `<label class="tp-row${on ? " on" : ""}">
+          <input type="checkbox" data-key="${escapeHtml(p.key)}"${on ? " checked" : ""}>
+          <span class="tp-name">${escapeHtml(p.name)}</span>
+          ${others.length ? `<span class="tp-others">${others.map(t => "🔖" + escapeHtml(t)).join(" ")}</span>` : ""}
+        </label>`;
+      }).join("");
+      return `<div class="tp-cat">${escapeHtml(c)}</div>${rows}`;
+    }).join("") : '<div class="tag-empty">沒有符合的產品</div>';
+    updateTagPickerCount();
+  }
+
+  function openTagPicker(tag){
+    if(!tagMap[tag]) return;
+    tagPickerTag = tag;
+    tagPickerProducts = collectTagProducts();
+    tagPickerSel = new Set(tagMap[tag].map(favKey));
+    $("tagPickerTitle").textContent = `選擇放進「${tag}」的產品`;
+    $("tagPickerSearch").value = "";
+    renderTagPickerList();
+    openAppModal("tagPickerModal");
+  }
+
+  $("tagPickerList").addEventListener("change", (e) => {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if(!cb) return;
+    if(cb.checked) tagPickerSel.add(cb.dataset.key); else tagPickerSel.delete(cb.dataset.key);
+    const row = cb.closest(".tp-row");
+    if(row) row.classList.toggle("on", cb.checked);
+    updateTagPickerCount();
+  });
+  $("tagPickerSearch").addEventListener("input", renderTagPickerList);
+  $("tagPickerSelectAll").addEventListener("click", () => {
+    tagPickerVisible().forEach(p => tagPickerSel.add(p.key));
+    renderTagPickerList();
+  });
+  $("tagPickerClearAll").addEventListener("click", () => {
+    tagPickerVisible().forEach(p => tagPickerSel.delete(p.key));
+    renderTagPickerList();
+  });
+  $("tagPickerSaveBtn").addEventListener("click", () => {
+    const tag = tagPickerTag;
+    if(tagMap[tag]){
+      // 目前已經找不到紀錄的舊名稱（例如產品被刪掉了）原樣保留，只更新「找得到的產品」的勾選結果
+      const existing = new Set(tagPickerProducts.map(p => p.key));
+      const kept = tagMap[tag].filter(n => !existing.has(favKey(n)));
+      const chosen = tagPickerProducts.filter(p => tagPickerSel.has(p.key)).map(p => p.name);
+      tagMap[tag] = kept.concat(chosen);
+      syncTags();
+      tagManagerMsg.textContent = `已更新「${tag}」：現在有 ${chosen.length} 項產品`;
+    }
+    closeAppModal("tagPickerModal");
+    renderTagManager();
+    renderTable();
+  });
+
+  wireAppModal("tagModal", "closeTagModalBtn");
+  wireAppModal("tagPickerModal", "closeTagPickerBtn");
+  const jumpToTagManagerBtn = $("jumpToTagManager");
+  if(jumpToTagManagerBtn){
+    jumpToTagManagerBtn.addEventListener("click", () => {
+      tagManagerMsg.textContent = "";
+      renderTagManager();
+      openAppModal("tagModal");
+    });
+  }
+
   function renderProductCard(group, band, rank, total){
     const item = group.rep;
     const pending = !!item.pending;
@@ -5407,6 +5859,11 @@
     if(variants > 1) badges.push(`<span class="p-badge">${variants} 種規格</span>`);
     if(pending && item.uploadError) badges.push('<span class="p-badge err">⚠ 上傳失敗</span>');
     else if(pending) badges.push('<span class="p-badge">⏳ 上傳中</span>');
+    if(!pending){
+      const cardTags = tagsOfName(item.name);
+      cardTags.slice(0, 3).forEach(t => badges.push(`<span class="p-badge tag">🔖${escapeHtml(t)}</span>`));
+      if(cardTags.length > 3) badges.push(`<span class="p-badge tag">+${cardTags.length - 3}</span>`);
+    }
     const rankText = (!pending && total > 1) ? `#${rank}/${total}` : "";
     const fav = !pending && isFavorite(item.name);
     const starHtml = pending ? "" : `<button type="button" class="fav-star${fav ? " on" : ""}" data-name="${escapeHtml(item.name)}" aria-pressed="${fav}" aria-label="${fav ? "取消最愛" : "加入最愛"}" title="${fav ? "取消優先挑選" : "標成優先挑選"}">${fav ? "★" : "☆"}</button>`;
@@ -5484,6 +5941,7 @@
 
   function renderTable(){
     renderBrandOptions();
+    renderTagChips();
     updateCategoryStatsBar();
     if(sortToggleBtn){
       sortToggleBtn.textContent = sortAsc ? "🔽 最划算優先" : "🔼 最貴優先";
@@ -5495,7 +5953,7 @@
       favFilterBtn.classList.toggle("active", favOnly);
     }
 
-    const list = items.filter(i => categoryMatches(i, activeCategory) && itemMatchesSearch(i, searchTerm) && (!favOnly || isFavorite(i.name)));
+    const list = items.filter(i => categoryMatches(i, activeCategory) && itemMatchesSearch(i, searchTerm) && (!favOnly || isFavorite(i.name)) && matchesActiveTags(i));
     if(list.length === 0){
       tableBody.innerHTML = favOnly
         ? '<div class="empty-state">還沒有符合條件的最愛產品<br>點產品卡片右上角的 ☆ 就能標成優先挑選</div>'
@@ -5587,6 +6045,17 @@
         </button>`).join("")}
     ` : "";
 
+    const allTags = Object.keys(tagMap);
+    const tagSectionHtml = `
+      <div class="detail-sub-title">🔖 標籤（點一下加入／移除，可多選）</div>
+      <div class="chips detail-tags">
+        ${allTags.length ? allTags.map(t => `<button type="button" class="chip tag detail-tag${tagHas(t, item.name) ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("") : '<span class="tag-empty">還沒有任何標籤，可以在下方直接新增</span>'}
+      </div>
+      <div class="detail-tag-add">
+        <input type="text" id="detailNewTagInput" placeholder="新增標籤並加到這個產品" maxlength="20" autocomplete="off">
+        <button type="button" id="detailNewTagBtn">加入</button>
+      </div>`;
+
     body.innerHTML = `
       <div class="detail-head tier-${tier}">
         <div class="detail-name">${escapeHtml(item.name)}</div>
@@ -5606,6 +6075,7 @@
         <div><span>購買地點</span><strong>${item.location ? escapeHtml(item.location) : "—"}</strong></div>
       </div>
       ${variantsHtml}
+      ${tagSectionHtml}
       <div class="detail-actions">
         <button type="button" id="detailFavBtn" class="${isFavorite(item.name) ? "fav-on" : ""}">${isFavorite(item.name) ? "★ 已加入最愛" : "☆ 加入最愛"}</button>
       </div>
@@ -5620,6 +6090,28 @@
         detailRow = btn.dataset.row;
         renderDetail();
       });
+    });
+    body.querySelectorAll(".detail-tag").forEach(btn => {
+      btn.addEventListener("click", () => {
+        toggleItemTag(btn.dataset.tag, item.name);
+        renderTable();
+        renderDetail();
+      });
+    });
+    const detailNewTagInput = $("detailNewTagInput");
+    const detailNewTagBtn = $("detailNewTagBtn");
+    const addDetailTag = () => {
+      const name = detailNewTagInput.value.trim();
+      if(!name) return;
+      let tag = findTagCaseInsensitive(name);
+      if(!tag){ tag = name; tagMap[tag] = []; }
+      if(!tagHas(tag, item.name)) toggleItemTag(tag, item.name); else syncTags();
+      renderTable();
+      renderDetail();
+    };
+    if(detailNewTagBtn) detailNewTagBtn.addEventListener("click", addDetailTag);
+    if(detailNewTagInput) detailNewTagInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); addDetailTag(); }
     });
     const favBtn = $("detailFavBtn");
     if(favBtn) favBtn.addEventListener("click", () => toggleFavorite(item.name));

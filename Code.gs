@@ -46,6 +46,12 @@
  *    「優先挑選」，資料存進一個叫「最愛」的新分頁（第一次用到時自動建立，不用手動新增），
  *    不同裝置會一致。更新這份程式後，記得「部署」→「管理部署作業」→ 編輯 → 版本選「新版本」→ 部署，
  *    網址不會變，新功能才會生效。
+ *
+ * ℹ 這個版本加了「標籤」功能：標籤跟「類別」是兩套獨立的分類，一個產品可以同時有多個標籤
+ *    （例如精華液：「美白度高」＋「刺激度低」），一個標籤也可以一次放很多產品。資料存進一個叫
+ *    「標籤」的新分頁（第一次用到時自動建立，不用手動新增），欄位：標籤名稱 | 品項名稱。
+ *    品項名稱欄留空的那一列，代表「已建立、但還沒放任何產品」的標籤。
+ *    更新後同樣要「部署」→「管理部署作業」→ 編輯 → 版本選「新版本」→ 部署。
  */
 
 const SHEET_NAME = '工作表1'; // 依實際分頁名稱調整
@@ -118,6 +124,79 @@ function setFavorite_(name, favorite) {
       }
     }
     if (favorite && !found) sheet.appendRow([n, new Date()]);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 存放「標籤」的分頁：標籤跟類別是兩套獨立的分類，一個產品可以有多個標籤、一個標籤可以放多個產品。
+// 以「完整品項名稱（品牌＋品名）」為單位，同一品項不同規格／通路共用同一組標籤（跟「最愛」一致）。
+// 欄位：標籤名稱 | 品項名稱（品項名稱留空 = 這個標籤已建立，但目前還沒有任何產品）
+const TAG_SHEET_NAME = '標籤';
+
+function getTagSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(TAG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(TAG_SHEET_NAME);
+    sheet.appendRow(['標籤名稱', '品項名稱']);
+  }
+  return sheet;
+}
+
+// 讀出所有標籤，整理成 { 標籤名稱: [品項名稱, ...] }（保留標籤在試算表裡出現的先後順序）
+function readTags_() {
+  const sheet = getTagSheet_();
+  const lastRow = sheet.getLastRow();
+  const result = {};
+  if (lastRow < 2) return result;
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  values.forEach(row => {
+    const tag = String(row[0] || '').trim();
+    const name = String(row[1] || '').trim();
+    if (!tag) return;
+    if (!result[tag]) result[tag] = [];
+    if (name && result[tag].indexOf(name) === -1) result[tag].push(name);
+  });
+  return result;
+}
+
+// 把前端傳來的完整標籤清單（{ 標籤: [品項名稱, ...] }）整批覆寫回試算表
+function writeTags_(tags) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getTagSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, 2).clearContent();
+    }
+
+    const rows = [];
+    const map = (tags && typeof tags === 'object' && !Array.isArray(tags)) ? tags : {};
+    Object.keys(map).forEach(tag => {
+      const t = String(tag || '').trim();
+      if (!t) return;
+      const names = Array.isArray(map[tag]) ? map[tag] : [];
+      const seen = {};
+      const clean = [];
+      names.forEach(n => {
+        const name = String(n || '').trim();
+        const key = name.toLowerCase();
+        if (name && !seen[key]) { seen[key] = true; clean.push(name); }
+      });
+      if (clean.length === 0) {
+        // 還沒有任何產品的標籤，也要存一列，才不會存完又消失
+        rows.push([t, '']);
+      } else {
+        clean.forEach(name => rows.push([t, name]));
+      }
+    });
+
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, 2).setValues(rows);
+    }
   } finally {
     lock.releaseLock();
   }
@@ -614,7 +693,8 @@ function doGet(e) {
     const comparisonLog = readComparisonLog_();
     const manualCategories = readManualCategories_();
     const favorites = readFavorites_();
-    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories, favorites });
+    const tags = readTags_();
+    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories, favorites, tags });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
@@ -672,6 +752,12 @@ function doPost(e) {
     // 加入／取消最愛（星星）：跟品項資料是不同分頁，這裡直接處理
     if (body.action === 'setFavorite') {
       setFavorite_(body.name, !!body.favorite);
+      return jsonOut_({ status: 'ok' });
+    }
+
+    // 儲存標籤清單（整批覆寫；跟品項資料是不同分頁，這裡直接處理）
+    if (body.action === 'saveTags') {
+      writeTags_(body.tags || {});
       return jsonOut_({ status: 'ok' });
     }
 
