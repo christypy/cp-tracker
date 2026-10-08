@@ -5594,6 +5594,17 @@
     items.forEach(i => { if(!i.pending){ const k = favKey(i.name); if(keys.has(k)) alive.add(k); } });
     return alive.size;
   }
+  // 目前所選主類別／子類別範圍內，這個標籤實際有幾個產品（用來決定標籤要不要顯示、數字多少）
+  function tagProductCountInScope(tag){
+    const keys = new Set((tagMap[tag] || []).map(favKey));
+    const alive = new Set();
+    items.forEach(i => {
+      if(i.pending || !categoryMatches(i, activeCategory)) return;
+      const k = favKey(i.name);
+      if(keys.has(k)) alive.add(k);
+    });
+    return alive.size;
+  }
   function toggleItemTag(tag, name){
     if(!tagMap[tag]) return;
     const k = favKey(name);
@@ -5628,12 +5639,16 @@
   function renderTagChips(){
     const box = $("tagChips");
     if(!box) return;
-    const tags = Object.keys(tagMap);
-    Array.from(activeTags).forEach(t => { if(!tagMap[t]) activeTags.delete(t); });
+    // 只顯示「目前主類別／子類別範圍內至少有一個產品」的標籤，數字也只算這個範圍內的產品
+    const scopedCounts = {};
+    Object.keys(tagMap).forEach(t => { scopedCounts[t] = tagProductCountInScope(t); });
+    const tags = Object.keys(tagMap).filter(t => scopedCounts[t] > 0);
+    // 切換類別後，已選取但這個範圍內不存在的標籤要取消，避免列表被看不見的條件篩成空白
+    Array.from(activeTags).forEach(t => { if(!tagMap[t] || !scopedCounts[t]) activeTags.delete(t); });
     if(!tags.length){ box.innerHTML = ""; return; }
     box.innerHTML =
       '<span class="tag-chips-label">🔖 標籤' + (activeTags.size > 1 ? "（同時符合）" : "") + '</span>' +
-      tags.map(t => `<button type="button" class="chip tag${activeTags.has(t) ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} (${tagProductCount(t)})</button>`).join("") +
+      tags.map(t => `<button type="button" class="chip tag${activeTags.has(t) ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} (${scopedCounts[t]})</button>`).join("") +
       (activeTags.size ? '<button type="button" class="chip tag tag-clear" data-clear="1">✕ 清除</button>' : "");
     box.querySelectorAll(".chip").forEach(btn => {
       btn.addEventListener("click", () => {
