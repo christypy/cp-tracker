@@ -47,6 +47,10 @@
  *    不同裝置會一致。更新這份程式後，記得「部署」→「管理部署作業」→ 編輯 → 版本選「新版本」→ 部署，
  *    網址不會變，新功能才會生效。
  *
+ * ℹ 這個版本加了「購物清單」功能：記錄想買的東西（名稱、連結、價格、類別、是否已購買），
+ *    資料存進一個叫「購物清單」的新分頁（第一次用到時自動建立，不用手動新增）。
+ *    更新後同樣要「部署」→「管理部署作業」→ 編輯 → 版本選「新版本」→ 部署。
+ *
  * ℹ 這個版本加了「標籤」功能：標籤跟「類別」是兩套獨立的分類，一個產品可以同時有多個標籤
  *    （例如精華液：「美白度高」＋「刺激度低」），一個標籤也可以一次放很多產品。資料存進一個叫
  *    「標籤」的新分頁（第一次用到時自動建立，不用手動新增），欄位：標籤名稱 | 品項名稱。
@@ -196,6 +200,82 @@ function writeTags_(tags) {
 
     if (rows.length > 0) {
       sheet.getRange(2, 1, rows.length, 2).setValues(rows);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 存放「購物清單」的分頁：記錄「想買」的東西，第一次用到時自動建立，不用手動新增。
+// 欄位：編號 | 名稱 | 連結 | 價格 | 類別 | 已購買 | 新增時間
+// 前端每次整批覆寫（跟「標籤」同樣做法），編號由前端產生，用來辨識同一筆。
+const WISHLIST_SHEET_NAME = '購物清單';
+const WISHLIST_HEADERS = ['編號', '名稱', '連結', '價格', '類別', '已購買', '新增時間'];
+
+function getWishlistSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(WISHLIST_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(WISHLIST_SHEET_NAME);
+    sheet.appendRow(WISHLIST_HEADERS);
+  }
+  return sheet;
+}
+
+// 讀出所有購物清單項目
+function readWishlist_() {
+  const sheet = getWishlistSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const values = sheet.getRange(2, 1, lastRow - 1, WISHLIST_HEADERS.length).getValues();
+  const result = [];
+  values.forEach(row => {
+    const name = String(row[1] || '').trim();
+    if (!name) return;
+    let created = row[6];
+    if (created instanceof Date) created = Utilities.formatDate(created, tz, "yyyy-MM-dd'T'HH:mm:ss");
+    const priceNum = row[3] === '' ? '' : Number(row[3]);
+    result.push({
+      id: String(row[0] || '').trim(),
+      name: name,
+      url: String(row[2] || '').trim(),
+      price: (priceNum === '' || isNaN(priceNum)) ? '' : priceNum,
+      category: String(row[4] || '').trim(),
+      bought: row[5] === true || String(row[5]).trim().toUpperCase() === 'TRUE' || String(row[5]).trim() === '是',
+      createdAt: String(created || '')
+    });
+  });
+  return result;
+}
+
+// 把前端傳來的完整購物清單整批覆寫回試算表
+function writeWishlist_(list) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getWishlistSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, WISHLIST_HEADERS.length).clearContent();
+    }
+    const rows = [];
+    (Array.isArray(list) ? list : []).forEach(it => {
+      const name = String((it && it.name) || '').trim();
+      if (!name) return;
+      const priceNum = Number(it.price);
+      rows.push([
+        String(it.id || '').trim(),
+        name,
+        String(it.url || '').trim(),
+        (it.price === '' || it.price === null || it.price === undefined || isNaN(priceNum)) ? '' : priceNum,
+        String(it.category || '').trim(),
+        !!it.bought,
+        String(it.createdAt || '')
+      ]);
+    });
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, WISHLIST_HEADERS.length).setValues(rows);
     }
   } finally {
     lock.releaseLock();
@@ -694,7 +774,8 @@ function doGet(e) {
     const manualCategories = readManualCategories_();
     const favorites = readFavorites_();
     const tags = readTags_();
-    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories, favorites, tags });
+    const wishlist = readWishlist_();
+    return jsonOut_({ status: 'ok', items, categoryOrder, comparisonLog, manualCategories, favorites, tags, wishlist });
   } catch (err) {
     return jsonOut_({ status: 'error', message: String(err) });
   }
@@ -758,6 +839,12 @@ function doPost(e) {
     // 儲存標籤清單（整批覆寫；跟品項資料是不同分頁，這裡直接處理）
     if (body.action === 'saveTags') {
       writeTags_(body.tags || {});
+      return jsonOut_({ status: 'ok' });
+    }
+
+    // 儲存購物清單（整批覆寫；跟品項資料是不同分頁，這裡直接處理）
+    if (body.action === 'saveWishlist') {
+      writeWishlist_(body.wishlist || []);
       return jsonOut_({ status: 'ok' });
     }
 
