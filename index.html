@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>CP值紀錄</title>
+<meta name="theme-color" content="#4A2E1C">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234A2E1C'/%3E%3Ccircle cx='32' cy='11' r='3.5' fill='%23FFF8F0'/%3E%3Ctext x='32' y='47' font-family='Arial,Helvetica,sans-serif' font-size='38' font-weight='700' text-anchor='middle' fill='%23FFF8F0'%3E%24%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -2248,6 +2250,47 @@
   #tagModal .location-manager-row{flex-wrap:wrap;}
   #tagModal .location-manager-row .loc-name{min-width:40%;}
 
+  /* ---------- 購物清單 ---------- */
+  #wishlistModal .settings-body{gap:12px;}
+  .wish-form{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+    background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:12px;
+  }
+  .wish-form .wf-full{grid-column:1/-1;}
+  .settings-body .wish-form input{font-family:'Noto Sans TC', sans-serif; font-size:16px; padding:10px; background:var(--white);}
+  .wish-form-actions{grid-column:1/-1; display:flex; gap:8px;}
+  .settings-body .wish-form-actions button{flex:1; align-self:stretch; padding:11px; font-size:14px; font-weight:700; min-height:44px;}
+  .settings-body .wish-form-actions button.ghost{background:var(--white); color:var(--ink-soft); border-color:var(--line);}
+  .wish-summary{font-size:12px; color:var(--ink-soft); text-align:center;}
+  .wish-summary strong{color:var(--ink);}
+  .wish-filters{display:flex; flex-wrap:wrap; gap:8px;}
+  .wish-list{display:flex; flex-direction:column; gap:6px;}
+  .wish-list:empty::after{content:"還沒有任何想買的東西，在上方新增吧"; font-size:12px; color:var(--ink-soft); text-align:center; padding:14px 0;}
+  .wish-row{
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:12px; background:var(--white);
+  }
+  .wish-row.bought{background:var(--paper); opacity:.7;}
+  .wish-row.bought .wish-name{text-decoration:line-through;}
+  .settings-body .wish-row input[type="checkbox"]{width:22px; height:22px; padding:0; flex:none; accent-color:var(--green); cursor:pointer;}
+  .wish-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;}
+  .wish-name{font-size:14.5px; font-weight:700; line-height:1.4; overflow-wrap:anywhere;}
+  .wish-meta{display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft);}
+  .wish-meta .wish-price{font-family:'Space Mono', monospace; font-weight:700; color:var(--ink);}
+  .wish-meta a{color:#3F6B66; text-decoration:underline; word-break:break-all;}
+  .wish-actions{display:flex; gap:4px; flex:none;}
+  .settings-body .wish-filters .chip{
+    background:var(--white); color:var(--ink-soft); border:1px solid var(--line); padding:6px 12px; align-self:auto;
+  }
+  .settings-body .wish-filters .chip.active{background:var(--ink); border-color:var(--ink); color:var(--paper);}
+  .wish-actions button{
+    padding:0; align-self:auto;
+    width:36px; height:36px; border:1px solid var(--line); border-radius:8px;
+    background:var(--white); color:var(--ink-soft); cursor:pointer; font-size:14px; touch-action:manipulation;
+  }
+  .wish-actions button:hover{color:var(--ink); border-color:var(--ink);}
+  .wish-actions button.danger:hover{color:var(--red); border-color:var(--red);}
+
   /* 勾選產品彈窗 */
   .tag-picker-sticky{
     position:sticky; top:0; z-index:2;
@@ -2310,6 +2353,7 @@
   <button type="button" id="jumpToCategoryManager">🏷 管理主類別／子類別</button>
   <button type="button" id="jumpToLocationManager">📍 管理購買地點</button>
   <button type="button" id="jumpToTagManager">🔖 管理標籤</button>
+  <button type="button" id="jumpToWishlist">🛒 購物清單</button>
   <button type="button" id="jumpToSettings">⚙ 設定同步網址</button>
 </div>
 
@@ -2546,6 +2590,45 @@
       <div class="tag-picker-actions">
         <button type="button" id="tagPickerSaveBtn">✓ 完成</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 購物清單彈跳視窗 -->
+<div id="wishlistModal" class="app-modal-backdrop">
+  <div class="app-modal-box tall">
+    <div class="app-modal-header">
+      <p class="card-title">🛒 購物清單</p>
+      <button type="button" class="app-modal-close" id="closeWishlistModalBtn">關閉 ✕</button>
+    </div>
+    <div class="settings-body">
+      <form class="wish-form" id="wishForm" autocomplete="off">
+        <div class="field wf-full">
+          <label for="wishName">名稱</label>
+          <input type="text" id="wishName" placeholder="想買的東西" maxlength="80">
+        </div>
+        <div class="field wf-full">
+          <label for="wishUrl">連結（選填）</label>
+          <input type="url" id="wishUrl" inputmode="url" placeholder="https://…" autocapitalize="off">
+        </div>
+        <div class="field">
+          <label for="wishPrice">價格 ($，選填)</label>
+          <input type="number" id="wishPrice" inputmode="decimal" step="any" placeholder="380">
+        </div>
+        <div class="field">
+          <label for="wishCategory">類別（選填）</label>
+          <input type="text" id="wishCategory" list="wishCategoryList" placeholder="可選或自己輸入">
+          <datalist id="wishCategoryList"></datalist>
+        </div>
+        <div class="wish-form-actions">
+          <button type="submit" id="wishSubmitBtn">＋ 加入清單</button>
+          <button type="button" class="ghost" id="wishCancelBtn" style="display:none;">取消編輯</button>
+        </div>
+      </form>
+      <div class="wish-summary" id="wishSummary"></div>
+      <div class="wish-filters" id="wishFilters"></div>
+      <div class="wish-list" id="wishList"></div>
+      <div class="location-manager-msg" id="wishMsg"></div>
     </div>
   </div>
 </div>
@@ -4679,6 +4762,11 @@
         tagMap = normalizeTagMap(data.tags);
         saveTagsLocal();
       }
+      if(Array.isArray(data.wishlist)){
+        wishlist = normalizeWishlist(data.wishlist);
+        saveWishlistLocal();
+        if($("wishlistModal").classList.contains("show")) renderWishlist();
+      }
       setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
       renderLocationOptions();
       renderCategoryChips();
@@ -6210,6 +6298,226 @@
       renderTable();
     }, 200);
   });
+
+  // ---------- 購物清單 ----------
+  // 記錄「想買」的東西：名稱、連結、價格、類別、是否已購買。
+  // 跟標籤一樣整份清單同步到試算表的「購物清單」分頁；localStorage 只當離線快取。
+  const LS_WISHLIST_KEY = "cp_tracker_wishlist_v1";
+  let wishlist = [];
+  try{
+    const storedWish = JSON.parse(localStorage.getItem(LS_WISHLIST_KEY) || "[]");
+    if(Array.isArray(storedWish)) wishlist = storedWish;
+  }catch(e){ wishlist = []; }
+  let wishFilter = "all";      // all / todo / done
+  let wishEditingId = null;
+
+  const wishForm = $("wishForm");
+  const wishNameInput = $("wishName");
+  const wishUrlInput = $("wishUrl");
+  const wishPriceInput = $("wishPrice");
+  const wishCategoryInput = $("wishCategory");
+  const wishSubmitBtn = $("wishSubmitBtn");
+  const wishCancelBtn = $("wishCancelBtn");
+  const wishMsg = $("wishMsg");
+
+  function saveWishlistLocal(){ localStorage.setItem(LS_WISHLIST_KEY, JSON.stringify(wishlist)); }
+
+  function normalizeWishlist(raw){
+    if(!Array.isArray(raw)) return [];
+    return raw.map(w => ({
+      id: String(w.id || "").trim() || newWishId(),
+      name: String(w.name || "").trim(),
+      url: String(w.url || "").trim(),
+      price: (w.price === "" || w.price === null || w.price === undefined || isNaN(Number(w.price))) ? "" : Number(w.price),
+      category: String(w.category || "").trim(),
+      bought: !!w.bought,
+      createdAt: String(w.createdAt || "")
+    })).filter(w => w.name);
+  }
+
+  function newWishId(){
+    return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  // 依序送出整份清單（body 在真正送出的當下才組，連續快速勾選時最後一次一定是最新狀態）
+  let wishChain = Promise.resolve();
+  function syncWishlist(){
+    saveWishlistLocal();
+    if(!scriptUrl) return;
+    setSyncState("syncing", "同步購物清單中…");
+    wishChain = wishChain.then(async () => {
+      try{
+        const data = await postWithTimeout({ action: "saveWishlist", wishlist: wishlist });
+        if(data.status !== "ok") throw new Error(data.message || "購物清單同步失敗");
+        setSyncState("ok", "已同步 · " + new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit"}));
+      }catch(err){
+        setSyncState("error", "購物清單已存在本機，但同步到試算表失敗（請確認 Code.gs 已更新並重新部署）：" + err.message);
+        wishMsg.textContent = "已存在本機，但同步到試算表失敗：" + err.message;
+      }
+    });
+  }
+
+  // 連結只接受 http / https，沒寫開頭就自動補 https://，避免 javascript: 之類的連結
+  function cleanWishUrl(raw){
+    let u = String(raw || "").trim();
+    if(!u) return "";
+    if(!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = "https://" + u;
+    return /^https?:\/\//i.test(u) ? u : null;
+  }
+
+  function wishHost(url){
+    try{ return new URL(url).hostname.replace(/^www\./, ""); }catch(e){ return url; }
+  }
+
+  function renderWishCategoryList(){
+    const dl = $("wishCategoryList");
+    if(!dl) return;
+    const cats = new Set(Array.from(buildCategoryTree().keys()));
+    wishlist.forEach(w => { if(w.category) cats.add(w.category); });
+    dl.innerHTML = Array.from(cats).map(c => `<option value="${escapeHtml(c)}"></option>`).join("");
+  }
+
+  function renderWishlist(){
+    renderWishCategoryList();
+
+    const todo = wishlist.filter(w => !w.bought);
+    const done = wishlist.length - todo.length;
+    const todoTotal = todo.reduce((s, w) => s + (typeof w.price === "number" ? w.price : 0), 0);
+    $("wishSummary").innerHTML = wishlist.length
+      ? `還想買 <strong>${todo.length}</strong> 項・預估 <strong>$${formatNum(todoTotal)}</strong>・已買 ${done} 項`
+      : "";
+
+    const filters = [["all", `全部 (${wishlist.length})`], ["todo", `未購買 (${todo.length})`], ["done", `已購買 (${done})`]];
+    $("wishFilters").innerHTML = filters.map(([k, label]) =>
+      `<button type="button" class="chip${wishFilter === k ? " active" : ""}" data-f="${k}">${label}</button>`).join("");
+
+    let list = wishlist.slice();
+    if(wishFilter === "todo") list = list.filter(w => !w.bought);
+    else if(wishFilter === "done") list = list.filter(w => w.bought);
+    // 未購買排前面，其餘維持新增順序（新的在上）
+    list.sort((a, b) => (a.bought === b.bought) ? 0 : (a.bought ? 1 : -1));
+
+    $("wishList").innerHTML = list.map(w => {
+      const meta = [];
+      if(typeof w.price === "number") meta.push(`<span class="wish-price">$${formatNum(w.price)}</span>`);
+      if(w.category) meta.push(`<span>🏷 ${escapeHtml(w.category)}</span>`);
+      if(w.url) meta.push(`<a href="${escapeHtml(w.url)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(wishHost(w.url))}</a>`);
+      return `
+        <div class="wish-row${w.bought ? " bought" : ""}" data-id="${escapeHtml(w.id)}">
+          <input type="checkbox" class="wish-check" ${w.bought ? "checked" : ""} aria-label="已購買">
+          <div class="wish-main">
+            <span class="wish-name">${escapeHtml(w.name)}</span>
+            ${meta.length ? `<span class="wish-meta">${meta.join("")}</span>` : ""}
+          </div>
+          <div class="wish-actions">
+            <button type="button" class="wish-edit" title="編輯">✎</button>
+            <button type="button" class="wish-del danger" title="刪除">✕</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function resetWishForm(){
+    wishEditingId = null;
+    wishForm.reset();
+    wishSubmitBtn.textContent = "＋ 加入清單";
+    wishCancelBtn.style.display = "none";
+  }
+
+  wishForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = wishNameInput.value.trim();
+    if(!name){
+      wishMsg.textContent = "請輸入名稱";
+      wishNameInput.focus();
+      return;
+    }
+    const url = cleanWishUrl(wishUrlInput.value);
+    if(url === null){
+      wishMsg.textContent = "連結只支援 http／https 開頭的網址";
+      wishUrlInput.focus();
+      return;
+    }
+    const priceRaw = wishPriceInput.value.trim();
+    const priceNum = parseFloat(priceRaw);
+    if(priceRaw !== "" && (isNaN(priceNum) || priceNum < 0)){
+      wishMsg.textContent = "價格格式不正確";
+      wishPriceInput.focus();
+      return;
+    }
+    const price = priceRaw === "" ? "" : priceNum;
+    const category = wishCategoryInput.value.trim();
+
+    if(wishEditingId){
+      const w = wishlist.find(x => x.id === wishEditingId);
+      if(w){ w.name = name; w.url = url; w.price = price; w.category = category; }
+      wishMsg.textContent = `已更新「${name}」`;
+    } else {
+      wishlist.unshift({ id: newWishId(), name, url, price, category, bought: false, createdAt: new Date().toISOString() });
+      wishMsg.textContent = `已加入「${name}」`;
+    }
+    resetWishForm();
+    renderWishlist();
+    syncWishlist();
+    wishNameInput.focus();
+  });
+
+  wishCancelBtn.addEventListener("click", () => { resetWishForm(); wishMsg.textContent = ""; });
+
+  $("wishFilters").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-f]");
+    if(!btn) return;
+    wishFilter = btn.dataset.f;
+    renderWishlist();
+  });
+
+  $("wishList").addEventListener("click", (e) => {
+    const row = e.target.closest(".wish-row");
+    if(!row) return;
+    const w = wishlist.find(x => x.id === row.dataset.id);
+    if(!w) return;
+    if(e.target.closest(".wish-edit")){
+      wishEditingId = w.id;
+      wishNameInput.value = w.name;
+      wishUrlInput.value = w.url || "";
+      wishPriceInput.value = w.price === "" ? "" : w.price;
+      wishCategoryInput.value = w.category || "";
+      wishSubmitBtn.textContent = "更新清單項目";
+      wishCancelBtn.style.display = "";
+      wishMsg.textContent = `正在編輯「${w.name}」`;
+      wishForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      wishNameInput.focus();
+    } else if(e.target.closest(".wish-del")){
+      if(!confirm(`確定要把「${w.name}」從購物清單刪除嗎？`)) return;
+      wishlist = wishlist.filter(x => x.id !== w.id);
+      if(wishEditingId === w.id) resetWishForm();
+      wishMsg.textContent = `已刪除「${w.name}」`;
+      renderWishlist();
+      syncWishlist();
+    }
+  });
+
+  $("wishList").addEventListener("change", (e) => {
+    const cb = e.target.closest(".wish-check");
+    if(!cb) return;
+    const row = cb.closest(".wish-row");
+    const w = wishlist.find(x => x.id === row.dataset.id);
+    if(!w) return;
+    w.bought = cb.checked;
+    wishMsg.textContent = cb.checked ? `「${w.name}」已標示為購買` : `「${w.name}」改回還想買`;
+    renderWishlist();
+    syncWishlist();
+  });
+
+  wireAppModal("wishlistModal", "closeWishlistModalBtn");
+  const jumpToWishlistBtn = $("jumpToWishlist");
+  if(jumpToWishlistBtn){
+    jumpToWishlistBtn.addEventListener("click", () => {
+      wishMsg.textContent = "";
+      renderWishlist();
+      openAppModal("wishlistModal");
+    });
+  }
 
   // ---------- 啟動 ----------
   renderLocationOptions();
